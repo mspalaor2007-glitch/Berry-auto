@@ -1,0 +1,258 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+local Window = Rayfield:CreateWindow({
+   Name = "Farm v5 🍓🛸👽",
+   LoadingTitle = "Aplicando Configuração Otimizada...",
+   LoadingSubtitle = "Velocidade Max: 32 | Voo Ativo",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false
+})
+
+local FarmTab = Window:CreateTab("🍓/👽 Fly Farm", 4483362458)
+local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
+
+-- Variáveis de controle
+_G.AutoFarmBerry = false
+_G.AutoFarmAlien = false
+_G.VelocidadeFarm = 32
+_G.BypassWalls = false
+_G.AlturaHover = 7
+_G.AlturaSeguraCeu = 110
+
+_G.VooLivreAtivo = false
+_G.VelocidadeVoo = 32
+
+-- Garante que o boneco não se machuque ou prenda em texturas locais
+local noclipConnection = nil
+local function ativarNoclipLocal(status)
+    if status then
+        if not noclipConnection then
+            noclipConnection = RunService.Stepped:Connect(function()
+                local character = player.Character
+                if character then
+                    for _, part in pairs(character:GetChildren()) do
+                        if part:IsA("BasePart") then
+                            part.CanCollide = false
+                        end
+                    end
+                end
+            end)
+        end
+    else
+        if noclipConnection then
+            noclipConnection:Disconnect()
+            noclipConnection = nil
+        end
+    end
+end
+
+-- ================= SISTEMA DE VOO DOS DEUSES (TWEEN FLYING) ================= --
+local function voarAteAlvo(destinoCFrame, velocidade)
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    ativarNoclipLocal(true)
+
+    if _G.BypassWalls then
+        -- Sobe para o céu
+        local posSubida = CFrame.new(rootPart.Position.X, _G.AlturaSeguraCeu, rootPart.Position.Z)
+        local t1 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - posSubida.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = posSubida})
+        t1:Play() t1.Completed:Wait()
+
+        -- Alinha sobre o alvo
+        local posCeuAlvo = CFrame.new(destinoCFrame.Position.X, _G.AlturaSeguraCeu, destinoCFrame.Position.Z)
+        local t2 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - posCeuAlvo.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = posCeuAlvo})
+        t2:Play() t2.Completed:Wait()
+
+        -- Desce no alvo
+        local t3 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - destinoCFrame.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = destinoCFrame})
+        t3:Play() t3.Completed:Wait()
+        
+    else
+        -- Voo Rasante Otimizado
+        local posicaoVooRasante = CFrame.new(destinoCFrame.Position.X, destinoCFrame.Position.Y + _G.AlturaHover - 5, destinoCFrame.Position.Z)
+        local dist = (rootPart.Position - posicaoVooRasante.Position).Magnitude
+        
+        local t = TweenService:Create(rootPart, TweenInfo.new(dist / velocidade, Enum.EasingStyle.Linear), {CFrame = posicaoVooRasante})
+        t:Play()
+        t.Completed:Wait()
+    end
+
+    ativarNoclipLocal(false)
+end
+
+-- ================= FUNÇÃO DE BUSCA DE ALVOS ================= --
+local function pegarAlvoMaisProximo(nomePasta, nomeItem)
+    local pasta = Workspace:FindFirstChild(nomePasta)
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+    if pasta and rootPart then
+        local alvo = nil
+        local menorDistancia = math.huge
+
+        for _, item in pairs(pasta:GetChildren()) do
+            if item.Name == nomeItem then
+                -- Garante que pegamos a parte principal caso seja um Model ou apenas uma Part
+                local targetPart = item:IsA("BasePart") and item or item:FindFirstChildWhichIsA("BasePart")
+                if targetPart then
+                    local dist = (rootPart.Position - targetPart.Position).Magnitude
+                    if dist < menorDistancia then
+                        menorDistancia = dist
+                        alvo = targetPart
+                    end
+                end
+            end
+        end
+        return alvo
+    end
+    return nil
+end
+
+-- ================= LOOP DO FLY FARM ================= --
+task.spawn(function()
+    while true do
+        local alvoAtual = nil
+        
+        -- Prioriza buscar Aliens se estiver ativado, senão busca Berries
+        if _G.AutoFarmAlien then
+            alvoAtual = pegarAlvoMaisProximo("Aliens", "Alien")
+        elseif _G.AutoFarmBerry then
+            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry")
+        end
+
+        if alvoAtual then
+            voarAteAlvo(alvoAtual.CFrame, _G.VelocidadeFarm)
+            task.wait(0.02)
+        end
+        
+        task.wait(0.1)
+    end
+end)
+
+-- ================= LOOP DO VOO MANUAL ================= --
+local bodyVelocity = nil
+local bodyGyro = nil
+
+RunService.RenderStepped:Connect(function()
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
+    local camera = Workspace.CurrentCamera
+
+    if _G.VooLivreAtivo and rootPart and humanoid and camera then
+        if not bodyVelocity or bodyVelocity.Parent ~= rootPart then
+            bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bodyVelocity.Parent = rootPart
+        end
+        
+        if not bodyGyro or bodyGyro.Parent ~= rootPart then
+            bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            bodyGyro.D = 100
+            bodyGyro.P = 10000
+            bodyGyro.Parent = rootPart
+        end
+
+        bodyGyro.CFrame = camera.CFrame
+
+        local direcao = humanoid.MoveDirection
+        if direcao.Magnitude > 0 then
+            bodyVelocity.Velocity = direcao * _G.VelocidadeVoo
+        else
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        end
+    else
+        if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+        if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+    end
+end)
+
+-- ================= INTERFACE ================= --
+
+FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM")
+
+FarmTab:CreateToggle({
+   Name = "ATIVAR FARM DE ALIEN 👽",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.AutoFarmAlien = Value
+   end,
+})
+
+FarmTab:CreateToggle({
+   Name = "ATIVAR FARM DE BERRY 🍓",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.AutoFarmBerry = Value
+   end,
+})
+
+FarmTab:CreateToggle({
+   Name = "Modo Altura Máxima (Bypass de Paredes)",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.BypassWalls = Value
+   end,
+})
+
+FarmTab:CreateSlider({
+   Name = "Velocidade de Voo do Farm",
+   Range = {10, 45},
+   Increment = 1,
+   Suffix = "Vel",
+   CurrentValue = 32,
+   Callback = function(Value)
+       _G.VelocidadeFarm = Value
+   end,
+})
+
+FarmTab:CreateSlider({
+   Name = "Altura do Voo Rasante (Hover)",
+   Range = {2, 20},
+   Increment = 1,
+   Suffix = "Studs",
+   CurrentValue = 7,
+   Callback = function(Value)
+       _G.AlturaHover = Value
+   end,
+})
+
+FarmTab:CreateSlider({
+   Name = "Altura do Voo de Rota Alta (Céu)",
+   Range = {80, 180},
+   Increment = 5,
+   Suffix = "Studs",
+   CurrentValue = 110,
+   Callback = function(Value)
+       _G.AlturaSeguraCeu = Value
+   end,
+})
+
+FlyTab:CreateSection("🛸 CONTROLE DE VOO LIVRE")
+
+FlyTab:CreateToggle({
+   Name = "Ativar Voo Manual",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.VooLivreAtivo = Value
+   end,
+})
+
+FlyTab:CreateSlider({
+   Name = "Velocidade",
+   Range = {15, 50},
+   Increment = 1,
+   Suffix = "Vel",
+   CurrentValue = 32,
+   Callback = function(Value)
+       _G.VelocidadeVoo = Value
+   end,
+})
