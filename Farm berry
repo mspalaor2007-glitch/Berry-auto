@@ -1,0 +1,168 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Workspace = game:GetService("Workspace")
+local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local player = Players.LocalPlayer
+
+local Window = Rayfield:CreateWindow({
+   Name = "Berry Anti-Cheat Bypass 🍓✈️",
+   LoadingTitle = "Injetando Física Suave...",
+   LoadingSubtitle = "Bypass de Teleporte & Voo",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false
+})
+
+local FarmTab = Window:CreateTab("🍓 Farm Suave", 4483362458)
+local FlyTab = Window:CreateTab("✈️ Modo Voo", 4483362458)
+
+-- Variáveis de controle
+_G.AutoFarmSuave = false
+_G.VelocidadeFarm = 35 -- Velocidade segura para o Tween não dar Clipe/TP
+
+_G.VooLivreAtivo = false
+_G.VelocidadeVoo = 35
+
+-- Função interna para mover o boneco sem teleportar (Bypass de Anti-TP)
+local function moverComBypass(destinoCFrame, velocidade)
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    local distancia = (rootPart.Position - destinoCFrame.Position).Magnitude
+    local duracao = distancia / velocidade
+
+    -- Cria um movimento constante e linear (o que o anti-cheat aceita como movimento legítimo)
+    local tweenInfo = TweenInfo.new(duracao, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+    local tween = TweenService:Create(rootPart, tweenInfo, {CFrame = destinoCFrame})
+    
+    tween:Play()
+    tween.Completed:Wait() -- Espera chegar na fruta antes de ir para a próxima
+end
+
+-- ================= LOOP 1: AUTO FARM SUAVE (TWEEN FARM) ================= --
+task.spawn(function()
+    while true do
+        if _G.AutoFarmSuave then
+            local berriesFolder = Workspace:FindFirstChild("Berries")
+            local character = player.Character
+            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+
+            if berriesFolder and rootPart then
+                local frutaAlvo = nil
+                local menorDistancia = math.huge
+
+                -- Procura a fruta mais próxima de você no momento
+                for _, berry in pairs(berriesFolder:GetChildren()) do
+                    if berry:IsA("BasePart") and berry.Name == "Berry" then
+                        local dist = (rootPart.Position - berry.Position).Magnitude
+                        if dist < menorDistancia then
+                            menorDistancia = dist
+                            frutaAlvo = berry
+                        end
+                    end
+                end
+
+                -- Se achou uma fruta, voa até ela de forma limpa
+                if frutaAlvo then
+                    -- Alinha o CFrame um pouquinho acima da fruta para coletar perfeitamente
+                    local posicaoAlvo = frutaAlvo.CFrame * CFrame.new(0, 1, 0)
+                    moverComBypass(posicaoAlvo, _G.VelocidadeFarm)
+                    task.wait(0.1) -- Pausa de segurança milimétrica para o servidor registrar a coleta
+                end
+            end
+        end
+        task.wait(0.2)
+    end
+end)
+
+-- ================= LOOP 2: SISTEMA DE VOO LIVRE ESTÁVEL ================= --
+local bodyVelocity = nil
+local bodyGyro = nil
+
+RunService.RenderStepped:Connect(function()
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
+    local camera = Workspace.CurrentCamera
+
+    if _G.VooLivreAtivo and rootPart and humanoid and camera then
+        -- Cria os controladores físicos se não existirem
+        if not bodyVelocity or bodyVelocity.Parent ~= rootPart then
+            bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bodyVelocity.Parent = rootPart
+        end
+        
+        if not bodyGyro or bodyGyro.Parent ~= rootPart then
+            bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
+            bodyGyro.D = 100
+            bodyGyro.P = 10000
+            bodyGyro.Parent = rootPart
+        end
+
+        -- Mantém o corpo olhando para onde a câmera aponta
+        bodyGyro.CFrame = camera.CFrame
+
+        -- Calcula a direção baseada no direcional/teclado do jogador
+        local direcao = humanoid.MoveDirection
+        if direcao.Magnitude > 0 then
+            -- Voa mantendo uma velocidade constante e idêntica (bula o anti-cheat)
+            bodyVelocity.Velocity = direcao * _G.VelocidadeVoo
+        else
+            -- Fica parado flutuando no ar estavelmente
+            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
+        end
+    else
+        -- Remove os controladores de voo se desativado para o boneco cair no chão normalmente
+        if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
+        if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
+    end
+end)
+
+-- ================= INTERFACE CONFIGURADA ================= --
+
+-- --- ABA: AUTO FARM ---
+FarmTab:CreateSection("✈️ DESLOCAMENTO AUTOMÁTICO ANTI-BAN")
+
+FarmTab:CreateToggle({
+   Name = "Ativar Auto Farm (Planar Até as Frutas)",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.AutoFarmSuave = Value
+   end,
+})
+
+FarmTab:CreateSlider({
+   Name = "Velocidade do Farm",
+   Range = {15, 60},
+   Increment = 1,
+   Suffix = "Vel",
+   CurrentValue = 35,
+   Callback = function(Value)
+       _G.VelocidadeFarm = Value
+   end,
+})
+
+-- --- ABA: VOO LIVRE ---
+FlyTab:CreateSection("🛸 CONTROLE DE VOO MANUAL")
+
+FlyTab:CreateToggle({
+   Name = "Ativar Modo Voo Estável",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.VooLivreAtivo = Value
+   end,
+})
+
+FlyTab:CreateSlider({
+   Name = "Velocidade do Voo",
+   Range = {15, 70},
+   Increment = 1,
+   Suffix = "Vel",
+   CurrentValue = 35,
+   Callback = function(Value)
+       _G.VelocidadeVoo = Value
+   end,
+})
