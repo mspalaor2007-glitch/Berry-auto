@@ -6,7 +6,7 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "Farm v5 🍓🛸👽",
+   Name = "Farm v6 🍓🛸👽🟡",
    LoadingTitle = "Aplicando Configuração Otimizada...",
    LoadingSubtitle = "Velocidade Max: 32 | Voo Ativo",
    ConfigurationSaving = { Enabled = false },
@@ -17,6 +17,7 @@ local FarmTab = Window:CreateTab("🍓/👽 Fly Farm", 4483362458)
 local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
 
 -- Variáveis de controle
+_G.AutoFarmGoldenBerry = false -- Nova variável para a fruta de dinheiro
 _G.AutoFarmBerry = false
 _G.AutoFarmAlien = false
 _G.VelocidadeFarm = 32
@@ -87,8 +88,8 @@ local function voarAteAlvo(destinoCFrame, velocidade)
     ativarNoclipLocal(false)
 end
 
--- ================= FUNÇÃO DE BUSCA DE ALVOS ================= --
-local function pegarAlvoMaisProximo(nomePasta, nomeItem)
+-- ================= FUNÇÃO DE BUSCA DE ALVOS (COM FILTRO DE COR) ================= --
+local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
     local pasta = Workspace:FindFirstChild(nomePasta)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -99,13 +100,26 @@ local function pegarAlvoMaisProximo(nomePasta, nomeItem)
 
         for _, item in pairs(pasta:GetChildren()) do
             if item.Name == nomeItem then
-                -- Garante que pegamos a parte principal caso seja um Model ou apenas uma Part
                 local targetPart = item:IsA("BasePart") and item or item:FindFirstChildWhichIsA("BasePart")
+                
                 if targetPart then
-                    local dist = (rootPart.Position - targetPart.Position).Magnitude
-                    if dist < menorDistancia then
-                        menorDistancia = dist
-                        alvo = targetPart
+                    local corValida = true
+                    
+                    -- Se passamos uma cor específica para buscar, ele verifica se bate
+                    if corObrigatoria then
+                        -- Checando pela cor RGB [255, 215, 0] ou BrickColor "Deep orange" que está nas suas prints
+                        local r, g, b = math.floor(targetPart.Color.R * 255), math.floor(targetPart.Color.G * 255), math.floor(targetPart.Color.B * 255)
+                        if (r ~= 255 or g ~= 215 or b ~= 0) and targetPart.BrickColor.Name ~= "Deep orange" then
+                            corValida = false
+                        end
+                    end
+
+                    if corValida then
+                        local dist = (rootPart.Position - targetPart.Position).Magnitude
+                        if dist < menorDistancia then
+                            menorDistancia = dist
+                            alvo = targetPart
+                        end
                     end
                 end
             end
@@ -120,10 +134,14 @@ task.spawn(function()
     while true do
         local alvoAtual = nil
         
-        -- Prioriza buscar Aliens se estiver ativado, senão busca Berries
-        if _G.AutoFarmAlien then
+        -- Hierarquia de prioridade do Auto Farm
+        if _G.AutoFarmGoldenBerry then
+            -- Busca especificamente pela Berry com a cor de dinheiro
+            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", true)
+        elseif _G.AutoFarmAlien then
             alvoAtual = pegarAlvoMaisProximo("Aliens", "Alien")
         elseif _G.AutoFarmBerry then
+            -- Busca qualquer Berry normal
             alvoAtual = pegarAlvoMaisProximo("Berries", "Berry")
         end
 
@@ -179,6 +197,15 @@ end)
 
 FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM")
 
+-- NOVO BOTÃO DE FARM DE DINHEIRO
+FarmTab:CreateToggle({
+   Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.AutoFarmGoldenBerry = Value
+   end,
+})
+
 FarmTab:CreateToggle({
    Name = "ATIVAR FARM DE ALIEN 👽",
    CurrentValue = false,
@@ -188,7 +215,7 @@ FarmTab:CreateToggle({
 })
 
 FarmTab:CreateToggle({
-   Name = "ATIVAR FARM DE BERRY 🍓",
+   Name = "ATIVAR FARM DE BERRY (COMUM) 🍓",
    CurrentValue = false,
    Callback = function(Value)
        _G.AutoFarmBerry = Value
