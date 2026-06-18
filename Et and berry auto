@@ -6,9 +6,9 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "Farm v6 🍓🛸👽🟡",
-   LoadingTitle = "Aplicando Configuração Otimizada...",
-   LoadingSubtitle = "Velocidade Max: 32 | Voo Ativo",
+   Name = "Farm v8 🚀🍓👽🟡",
+   LoadingTitle = "Restaurando Estabilidade...",
+   LoadingSubtitle = "Studs Manuais | Anti-Queda | Anti-Fantasma",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
 })
@@ -17,16 +17,16 @@ local FarmTab = Window:CreateTab("🍓/👽 Fly Farm", 4483362458)
 local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
 
 -- Variáveis de controle
-_G.AutoFarmGoldenBerry = false -- Nova variável para a fruta de dinheiro
+_G.AutoFarmGoldenBerry = false
 _G.AutoFarmBerry = false
 _G.AutoFarmAlien = false
-_G.VelocidadeFarm = 32
+_G.VelocidadeFarm = 31
 _G.BypassWalls = false
-_G.AlturaHover = 7
+_G.AlturaHover = 7 -- VOLTOU!
 _G.AlturaSeguraCeu = 110
 
 _G.VooLivreAtivo = false
-_G.VelocidadeVoo = 32
+_G.VelocidadeVoo = 31
 
 -- Garante que o boneco não se machuque ou prenda em texturas locais
 local noclipConnection = nil
@@ -53,42 +53,60 @@ local function ativarNoclipLocal(status)
 end
 
 -- ================= SISTEMA DE VOO DOS DEUSES (TWEEN FLYING) ================= --
-local function voarAteAlvo(destinoCFrame, velocidade)
+local function voarAteAlvo(alvo, velocidade)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    if not rootPart then return end
+    if not rootPart or not alvo or not alvo.Parent then return end
 
     ativarNoclipLocal(true)
 
     if _G.BypassWalls then
-        -- Sobe para o céu
+        -- Rota Alta (Céu)
         local posSubida = CFrame.new(rootPart.Position.X, _G.AlturaSeguraCeu, rootPart.Position.Z)
         local t1 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - posSubida.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = posSubida})
         t1:Play() t1.Completed:Wait()
 
-        -- Alinha sobre o alvo
-        local posCeuAlvo = CFrame.new(destinoCFrame.Position.X, _G.AlturaSeguraCeu, destinoCFrame.Position.Z)
+        local posCeuAlvo = CFrame.new(alvo.Position.X, _G.AlturaSeguraCeu, alvo.Position.Z)
         local t2 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - posCeuAlvo.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = posCeuAlvo})
         t2:Play() t2.Completed:Wait()
 
-        -- Desce no alvo
-        local t3 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - destinoCFrame.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = destinoCFrame})
-        t3:Play() t3.Completed:Wait()
+        local t3 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - alvo.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = alvo.CFrame})
+        t3:Play()
         
+        while t3.PlaybackState == Enum.PlaybackState.Playing do
+            if not alvo or not alvo.Parent then t3:Cancel() break end
+            task.wait(0.05)
+        end
     else
-        -- Voo Rasante Otimizado
-        local posicaoVooRasante = CFrame.new(destinoCFrame.Position.X, destinoCFrame.Position.Y + _G.AlturaHover - 5, destinoCFrame.Position.Z)
-        local dist = (rootPart.Position - posicaoVooRasante.Position).Magnitude
+        -- VOO RASANTE SEGURO (COM CONTROLE DE STUDS DE VOLTA)
+        local posicaoVooRasante = Vector3.new(alvo.Position.X, alvo.Position.Y + _G.AlturaHover - 5, alvo.Position.Z)
+        local dist = (rootPart.Position - posicaoVooRasante).Magnitude
         
-        local t = TweenService:Create(rootPart, TweenInfo.new(dist / velocidade, Enum.EasingStyle.Linear), {CFrame = posicaoVooRasante})
-        t:Play()
-        t.Completed:Wait()
+        if dist > 0.5 then
+            -- Vira o corpo APENAS NA HORIZONTAL (Garante que não vai apontar pro chão e cair do mapa)
+            local olharSeguro = Vector3.new(posicaoVooRasante.X, rootPart.Position.Y, posicaoVooRasante.Z)
+            rootPart.CFrame = CFrame.lookAt(rootPart.Position, olharSeguro)
+            
+            -- Mantém a rotação e viaja até o alvo na altura certa
+            local cfDestino = CFrame.new(posicaoVooRasante) * rootPart.CFrame.Rotation
+            local t = TweenService:Create(rootPart, TweenInfo.new(dist / velocidade, Enum.EasingStyle.Linear), {CFrame = cfDestino})
+            t:Play()
+            
+            -- ANTI-FANTASMA
+            while t.PlaybackState == Enum.PlaybackState.Playing do
+                if not alvo or not alvo.Parent then
+                    t:Cancel()
+                    break
+                end
+                task.wait(0.02)
+            end
+        end
     end
 
     ativarNoclipLocal(false)
 end
 
--- ================= FUNÇÃO DE BUSCA DE ALVOS (COM FILTRO DE COR) ================= --
+-- ================= FUNÇÃO DE BUSCA DE ALVOS ================= --
 local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
     local pasta = Workspace:FindFirstChild(nomePasta)
     local character = player.Character
@@ -105,11 +123,8 @@ local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
                 if targetPart then
                     local corValida = true
                     
-                    -- Se passamos uma cor específica para buscar, ele verifica se bate
                     if corObrigatoria then
-                        -- Checando pela cor RGB [255, 215, 0] ou BrickColor "Deep orange" que está nas suas prints
-                        local r, g, b = math.floor(targetPart.Color.R * 255), math.floor(targetPart.Color.G * 255), math.floor(targetPart.Color.B * 255)
-                        if (r ~= 255 or g ~= 215 or b ~= 0) and targetPart.BrickColor.Name ~= "Deep orange" then
+                        if targetPart.BrickColor.Name ~= "Deep orange" then
                             corValida = false
                         end
                     end
@@ -134,20 +149,17 @@ task.spawn(function()
     while true do
         local alvoAtual = nil
         
-        -- Hierarquia de prioridade do Auto Farm
         if _G.AutoFarmGoldenBerry then
-            -- Busca especificamente pela Berry com a cor de dinheiro
             alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", true)
         elseif _G.AutoFarmAlien then
             alvoAtual = pegarAlvoMaisProximo("Aliens", "Alien")
         elseif _G.AutoFarmBerry then
-            -- Busca qualquer Berry normal
             alvoAtual = pegarAlvoMaisProximo("Berries", "Berry")
         end
 
         if alvoAtual then
-            voarAteAlvo(alvoAtual.CFrame, _G.VelocidadeFarm)
-            task.wait(0.02)
+            voarAteAlvo(alvoAtual, _G.VelocidadeFarm)
+            task.wait(0.01)
         end
         
         task.wait(0.1)
@@ -197,7 +209,6 @@ end)
 
 FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM")
 
--- NOVO BOTÃO DE FARM DE DINHEIRO
 FarmTab:CreateToggle({
    Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡",
    CurrentValue = false,
@@ -235,12 +246,13 @@ FarmTab:CreateSlider({
    Range = {10, 45},
    Increment = 1,
    Suffix = "Vel",
-   CurrentValue = 32,
+   CurrentValue = 31,
    Callback = function(Value)
        _G.VelocidadeFarm = Value
    end,
 })
 
+-- O SLIDER VOLTOU PARA VOCÊ AJUSTAR!
 FarmTab:CreateSlider({
    Name = "Altura do Voo Rasante (Hover)",
    Range = {2, 20},
@@ -253,7 +265,7 @@ FarmTab:CreateSlider({
 })
 
 FarmTab:CreateSlider({
-   Name = "Altura do Voo de Rota Alta (Céu)",
+   Name = "Altura de Rota Segura (Por Cima)",
    Range = {80, 180},
    Increment = 5,
    Suffix = "Studs",
@@ -278,7 +290,7 @@ FlyTab:CreateSlider({
    Range = {15, 50},
    Increment = 1,
    Suffix = "Vel",
-   CurrentValue = 32,
+   CurrentValue = 31,
    Callback = function(Value)
        _G.VelocidadeVoo = Value
    end,
