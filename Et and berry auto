@@ -1,13 +1,14 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+Local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "Farm v8 (Física Otimizada) 🚀🍓👽🟡",
-   LoadingTitle = "Iniciando...",
-   LoadingSubtitle = "Velocidade Recomendada: 39",
+   Name = "Farm v8 🚀🍓👽🟡",
+   LoadingTitle = "Restaurando Estabilidade...",
+   LoadingSubtitle = "Studs Manuais | Anti-Queda | Anti-Fantasma",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
 })
@@ -15,19 +16,19 @@ local Window = Rayfield:CreateWindow({
 local FarmTab = Window:CreateTab("🍓/👽 Fly Farm", 4483362458)
 local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
 
--- Variáveis de controle (Padrão atualizado para 39)
+-- Variáveis de controle
 _G.AutoFarmGoldenBerry = false
 _G.AutoFarmBerry = false
 _G.AutoFarmAlien = false
-_G.VelocidadeFarm = 39 -- Fixado em 39 para máxima eficiência estável
+_G.VelocidadeFarm = 31
 _G.BypassWalls = false
-_G.AlturaHover = 7
+_G.AlturaHover = 7 -- VOLTOU!
 _G.AlturaSeguraCeu = 110
 
 _G.VooLivreAtivo = false
-_G.VelocidadeVoo = 39
+_G.VelocidadeVoo = 31
 
--- Noclip para o boneco não bater nas coisas enquanto voa fisicamente
+-- Garante que o boneco não se machuque ou prenda em texturas locais
 local noclipConnection = nil
 local function ativarNoclipLocal(status)
     if status then
@@ -51,49 +52,57 @@ local function ativarNoclipLocal(status)
     end
 end
 
--- ================= MOVIMENTAÇÃO POR VELOCIDADE FÍSICA CONSTANTE ================= --
-local function voarAteAlvoFisico(alvo, velocidade)
+-- ================= SISTEMA DE VOO DOS DEUSES (TWEEN FLYING) ================= --
+local function voarAteAlvo(alvo, velocidade)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-    if not rootPart or not humanoid or not alvo or not alvo.Parent then return end
+    if not rootPart or not alvo or not alvo.Parent then return end
 
     ativarNoclipLocal(true)
 
-    -- Define a altura alvo baseada nas suas configurações
-    local alturaAlvo = alvo.Position.Y + _G.AlturaHover - 5
     if _G.BypassWalls then
-        alturaAlvo = _G.AlturaSeguraCeu
-    end
+        -- Rota Alta (Céu)
+        local posSubida = CFrame.new(rootPart.Position.X, _G.AlturaSeguraCeu, rootPart.Position.Z)
+        local t1 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - posSubida.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = posSubida})
+        t1:Play() t1.Completed:Wait()
 
-    -- Loop de aproximação física
-    while _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry do
-        if not alvo or not alvo.Parent or not rootPart then break end
+        local posCeuAlvo = CFrame.new(alvo.Position.X, _G.AlturaSeguraCeu, alvo.Position.Z)
+        local t2 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - posCeuAlvo.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = posCeuAlvo})
+        t2:Play() t2.Completed:Wait()
 
-        local destino = Vector3.new(alvo.Position.X, alturaAlvo, alvo.Position.Z)
-        local direcao = (destino - rootPart.Position)
-        local distancia = direcao.Magnitude
-
-        -- Se chegou muito perto do ponto do alvo, sai do loop para pegar a próxima fruta
-        if distancia < 1.5 then 
-            break 
+        local t3 = TweenService:Create(rootPart, TweenInfo.new((rootPart.Position - alvo.Position).Magnitude / velocidade, Enum.EasingStyle.Linear), {CFrame = alvo.CFrame})
+        t3:Play()
+        
+        while t3.PlaybackState == Enum.PlaybackState.Playing do
+            if not alvo or not alvo.Parent then t3:Cancel() break end
+            task.wait(0.05)
         end
-
-        -- Olha com segurança para o lado do alvo (sem inclinar para baixo)
-        local olharSeguro = Vector3.new(destino.X, rootPart.Position.Y, destino.Z)
-        rootPart.CFrame = CFrame.lookAt(rootPart.Position, olharSeguro)
-
-        -- Aplica velocidade física linear em direção ao alvo
-        rootPart.AssemblyLinearVelocity = direcao.Unit * velocidade
-
-        task.wait(0.02)
+    else
+        -- VOO RASANTE SEGURO (COM CONTROLE DE STUDS DE VOLTA)
+        local posicaoVooRasante = Vector3.new(alvo.Position.X, alvo.Position.Y + _G.AlturaHover - 5, alvo.Position.Z)
+        local dist = (rootPart.Position - posicaoVooRasante).Magnitude
+        
+        if dist > 0.5 then
+            -- Vira o corpo APENAS NA HORIZONTAL (Garante que não vai apontar pro chão e cair do mapa)
+            local olharSeguro = Vector3.new(posicaoVooRasante.X, rootPart.Position.Y, posicaoVooRasante.Z)
+            rootPart.CFrame = CFrame.lookAt(rootPart.Position, olharSeguro)
+            
+            -- Mantém a rotação e viaja até o alvo na altura certa
+            local cfDestino = CFrame.new(posicaoVooRasante) * rootPart.CFrame.Rotation
+            local t = TweenService:Create(rootPart, TweenInfo.new(dist / velocidade, Enum.EasingStyle.Linear), {CFrame = cfDestino})
+            t:Play()
+            
+            -- ANTI-FANTASMA
+            while t.PlaybackState == Enum.PlaybackState.Playing do
+                if not alvo or not alvo.Parent then
+                    t:Cancel()
+                    break
+                end
+                task.wait(0.02)
+            end
+        end
     end
 
-    -- Para o boneco imediatamente ao terminar o trajeto
-    if rootPart then
-        rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-    end
-    
     ativarNoclipLocal(false)
 end
 
@@ -113,8 +122,11 @@ local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
                 
                 if targetPart then
                     local corValida = true
-                    if corObrigatoria and targetPart.BrickColor.Name ~= "Deep orange" then
-                        corValida = false
+                    
+                    if corObrigatoria then
+                        if targetPart.BrickColor.Name ~= "Deep orange" then
+                            corValida = false
+                        end
                     end
 
                     if corValida then
@@ -146,7 +158,8 @@ task.spawn(function()
         end
 
         if alvoAtual then
-            voarAteAlvoFisico(alvoAtual, _G.VelocidadeFarm)
+            voarAteAlvo(alvoAtual, _G.VelocidadeFarm)
+            task.wait(0.01)
         end
         
         task.wait(0.1)
@@ -193,49 +206,62 @@ RunService.RenderStepped:Connect(function()
 end)
 
 -- ================= INTERFACE ================= --
-FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (FÍSICA ATIVA)")
+
+FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM")
 
 FarmTab:CreateToggle({
    Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡",
    CurrentValue = false,
-   Callback = function(Value) _G.AutoFarmGoldenBerry = Value end,
+   Callback = function(Value)
+       _G.AutoFarmGoldenBerry = Value
+   end,
 })
 
 FarmTab:CreateToggle({
    Name = "ATIVAR FARM DE ALIEN 👽",
    CurrentValue = false,
-   Callback = function(Value) _G.AutoFarmAlien = Value end,
+   Callback = function(Value)
+       _G.AutoFarmAlien = Value
+   end,
 })
 
 FarmTab:CreateToggle({
    Name = "ATIVAR FARM DE BERRY (COMUM) 🍓",
    CurrentValue = false,
-   Callback = function(Value) _G.AutoFarmBerry = Value end,
+   Callback = function(Value)
+       _G.AutoFarmBerry = Value
+   end,
 })
 
 FarmTab:CreateToggle({
    Name = "Modo Altura Máxima (Bypass de Paredes)",
    CurrentValue = false,
-   Callback = function(Value) _G.BypassWalls = Value end,
+   Callback = function(Value)
+       _G.BypassWalls = Value
+   end,
 })
 
--- Ajustado o valor inicial para 39
 FarmTab:CreateSlider({
    Name = "Velocidade de Voo do Farm",
-   Range = {10, 60},
+   Range = {10, 45},
    Increment = 1,
    Suffix = "Vel",
-   CurrentValue = 39,
-   Callback = function(Value) _G.VelocidadeFarm = Value end,
+   CurrentValue = 31,
+   Callback = function(Value)
+       _G.VelocidadeFarm = Value
+   end,
 })
 
+-- O SLIDER VOLTOU PARA VOCÊ AJUSTAR!
 FarmTab:CreateSlider({
    Name = "Altura do Voo Rasante (Hover)",
    Range = {2, 20},
    Increment = 1,
    Suffix = "Studs",
    CurrentValue = 7,
-   Callback = function(Value) _G.AlturaHover = Value end,
+   Callback = function(Value)
+       _G.AlturaHover = Value
+   end,
 })
 
 FarmTab:CreateSlider({
@@ -244,7 +270,9 @@ FarmTab:CreateSlider({
    Increment = 5,
    Suffix = "Studs",
    CurrentValue = 110,
-   Callback = function(Value) _G.AlturaSeguraCeu = Value end,
+   Callback = function(Value)
+       _G.AlturaSeguraCeu = Value
+   end,
 })
 
 FlyTab:CreateSection("🛸 CONTROLE DE VOO LIVRE")
@@ -252,7 +280,9 @@ FlyTab:CreateSection("🛸 CONTROLE DE VOO LIVRE")
 FlyTab:CreateToggle({
    Name = "Ativar Voo Manual",
    CurrentValue = false,
-   Callback = function(Value) _G.VooLivreAtivo = Value end,
+   Callback = function(Value)
+       _G.VooLivreAtivo = Value
+   end,
 })
 
 FlyTab:CreateSlider({
@@ -260,8 +290,8 @@ FlyTab:CreateSlider({
    Range = {15, 50},
    Increment = 1,
    Suffix = "Vel",
-   CurrentValue = 39,
-   Callback = function(Value) _G.VelocidadeVoo = Value end,
+   CurrentValue = 31,
+   Callback = function(Value)
+       _G.VelocidadeVoo = Value
+   end,
 })
-
-Rayfield:LoadConfiguration()
