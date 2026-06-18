@@ -1,304 +1,151 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
+local TweenService = game:GetService("TweenService")
 local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "Farm v9 (CFrame Total) 🚀🍓👽🟡",
-   LoadingTitle = "Iniciando Sistema...",
-   LoadingSubtitle = "Forçando Movimentação por CFrame",
+   Name = "Berry Hitbox & Magnet v5 🍓🧲",
+   LoadingTitle = "Modificando Estrutura das Berries...",
+   LoadingSubtitle = "Hitbox Expandida + Ímã Ativo",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
 })
 
-local FarmTab = Window:CreateTab("🍓/👽 Fly Farm", 4483362458)
-local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
-local PlayersTab = Window:CreateTab("👥 Players", 4483362458)
+local FarmTab = Window:CreateTab("🍓 Funções Fantasma", 4483362458)
 
--- ================= VARIÁVEIS GLOBAIS DE CONTROLE ================= --
-_G.AutoFarmGoldenBerry = false
-_G.AutoFarmBerry = false
-_G.AutoFarmAlien = false
-_G.VelocidadeFarm = 33
-_G.BypassWalls = false
-_G.AlturaHover = 6
-_G.AlturaSeguraCeu = 110
+-- Variáveis de controle
+_G.ImaDeBerry = false
+_G.HitboxGigante = false
+_G.VelocidadeImaBerry = 40
 
-_G.VooLivreAtivo = false
-_G.VelocidadeVoo = 33
+-- Tabela para guardar o tamanho original das frutas e restaurar se desligar
+local tamanhosOriginais = {}
 
-_G.PerseguirPlayer = false
-_G.PlayerAlvo = ""
-_G.ModoAleatorioPlayers = false
-_G.DistanciaCostas = 4
-_G.VelocidadePerseguicao = 35
+-- ================= LOOP 1: ÍMÃ DESLIZANTE DE BERRIES ================= --
+task.spawn(function()
+    while true do
+        if _G.ImaDeBerry then
+            local character = player.Character
+            local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+            local berriesFolder = Workspace:FindFirstChild("Berries")
+            
+            if rootPart and berriesFolder then
+                pcall(function()
+                    for _, berry in pairs(berriesFolder:GetChildren()) do
+                        if berry:IsA("BasePart") and berry.Name == "Berry" and not berry:GetAttribute("SendoPuxado") then
+                            
+                            berry:SetAttribute("SendoPuxado", true)
+                            berry.Anchored = true
+                            berry.CanCollide = false
+                            
+                            task.spawn(function()
+                                while berry and berry.Parent and _G.ImaDeBerry do
+                                    local playerPos = rootPart.Position
+                                    local dist = (playerPos - berry.Position).Magnitude
+                                    
+                                    if dist < 3 then
+                                        berry.Anchored = false
+                                        -- Força o toque físico caso o firetouchinterest seja necessário
+                                        firetouchinterest(rootPart, berry, 0)
+                                        task.wait()
+                                        firetouchinterest(rootPart, berry, 1)
+                                        break
+                                    end
+                                    
+                                    local tempo = dist / _G.VelocidadeImaBerry
+                                    local tween = TweenService:Create(berry, TweenInfo.new(tempo, Enum.EasingStyle.Linear), {CFrame = CFrame.new(playerPos)})
+                                    tween:Play()
+                                    
+                                    task.wait(0.1)
+                                end
+                            end)
+                        end
+                    end
+                end)
+            end
+        end
+        task.wait(0.3)
+    end
+end)
 
-local function checarAutomacaoAtiva()
-    return _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry or _G.PerseguirPlayer
-end
+-- ================= LOOP 2: EXPANSÃO DE HITBOX + TOUCH INTEREST ================= --
+task.spawn(function()
+    while true do
+        local berriesFolder = Workspace:FindFirstChild("Berries")
+        local character = player.Character
+        local rootPart = character and character:FindFirstChild("HumanoidRootPart")
 
--- ================= FUNÇÃO SISTÊMICA: NOCLIP ================= --
-local noclipConnection = nil
-local function ativarNoclipLocal(status)
-    if status then
-        if not noclipConnection then
-            noclipConnection = RunService.Stepped:Connect(function()
-                local character = player.Character
-                if character then
-                    for _, part in pairs(character:GetChildren()) do
-                        if part:IsA("BasePart") then 
-                            part.CanCollide = false 
+        if berriesFolder then
+            pcall(function()
+                for _, berry in pairs(berriesFolder:GetChildren()) do
+                    if berry:IsA("BasePart") and berry.Name == "Berry" then
+                        
+                        -- Salva o tamanho original para não perder o controle
+                        if not tamanhosOriginais[berry] then
+                            tamanhosOriginais[berry] = berry.Size
+                        end
+
+                        if _G.HitboxGigante then
+                            -- Deixa a fruta ENORME (Hitbox Invisível de 15x15x15 studs)
+                            berry.Size = Vector3.new(15, 15, 15)
+                            berry.Transparency = 0.7 -- Fica semi-transparente para você ver o tamanho do raio
+                            berry.CanCollide = false
+                            
+                            -- Se você estiver por perto, o Toque Fantasma suga ela instantly
+                            if rootPart then
+                                local distancia = (rootPart.Position - berry.Position).Magnitude
+                                if distancia < 20 then
+                                    firetouchinterest(rootPart, berry, 0)
+                                    task.wait()
+                                    firetouchinterest(rootPart, berry, 1)
+                                end
+                            end
+                        else
+                            -- Se desligar o botão, volta ao tamanho normal de fábrica
+                            if tamanhosOriginais[berry] then
+                                berry.Size = tamanhosOriginais[berry]
+                                berry.Transparency = 0
+                            end
                         end
                     end
                 end
             end)
         end
-    else
-        if noclipConnection then 
-            noclipConnection:Disconnect() 
-            noclipConnection = nil 
-        end
-    end
-end
-
--- ================= NOVO MOTOR DE VOO: CFRAME SUAVE (INQUEBRÁVEL) ================= --
-local function voarAteAlvoSeparado(alvo, velocidade)
-    local character = player.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-    if not rootPart or not humanoid or not alvo or not alvo.Parent then return end
-    
-    ativarNoclipLocal(true)
-    
-    -- Zera as forças físicas para evitar conflitos estarem travando o boneco
-    rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
-    rootPart.AssemblyAngularVelocity = Vector3.new(0,0,0)
-    
-    local alturaAlvo = alvo.Position.Y + _G.AlturaHover - 5
-    if _G.BypassWalls then 
-        alturaAlvo = _G.AlturaSeguraCeu 
-    end
-    
-    while _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry do
-        if not alvo or not alvo.Parent or not rootPart then break end
-        
-        -- Posição final desejada (X, Altura corrigida, Z)
-        local destinoFinal = Vector3.new(alvo.Position.X, alturaAlvo, alvo.Position.Z)
-        local direcao = (destinoFinal - rootPart.Position)
-        local distancia = direcao.Magnitude
-        
-        if distancia < 1.5 then break end
-        
-        -- Move via CFrame (Calculado por tempo/frames para ser idêntico a uma velocidade real)
-        local passo = direcao.Unit * (velocidade * 0.02)
-        if passo.Magnitude > distancia then
-            passo = direcao
-        end
-        
-        rootPart.CFrame = CFrame.lookAt(rootPart.Position + passo, Vector3.new(alvo.Position.X, rootPart.Position.Y, alvo.Position.Z))
-        
-        task.wait(0.02)
-    end
-    
-    ativarNoclipLocal(false)
-end
-
--- ================= MOTOR DE VOO: MANUAL ================= --
-local bodyVelocity, bodyGyro = nil, nil
-RunService.RenderStepped:Connect(function()
-    local character = player.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-    local camera = Workspace.CurrentCamera
-    
-    if _G.VooLivreAtivo and not checarAutomacaoAtiva() and rootPart and humanoid and camera then
-        ativarNoclipLocal(true)
-        humanoid.PlatformStand = true
-        
-        if not bodyVelocity or bodyVelocity.Parent ~= rootPart then
-            bodyVelocity = Instance.new("BodyVelocity")
-            bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-            bodyVelocity.Parent = rootPart
-        end
-        if not bodyGyro or bodyGyro.Parent ~= rootPart then
-            bodyGyro = Instance.new("BodyGyro")
-            bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-            bodyGyro.D = 100
-            bodyGyro.P = 10000
-            bodyGyro.Parent = rootPart
-        end
-        
-        bodyGyro.CFrame = camera.CFrame
-        rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-        
-        local dir = humanoid.MoveDirection
-        if dir.Magnitude > 0 then
-            local vetorCamera = camera.CFrame.LookVector
-            local direcaoVoo = Vector3.new(dir.X, vetorCamera.Y, dir.Z)
-            bodyVelocity.Velocity = direcaoVoo.Unit * _G.VelocidadeVoo
-        else
-            bodyVelocity.Velocity = Vector3.new(0,0,0)
-        end
-    else
-        if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-        if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-        if humanoid and humanoid.PlatformStand and not checarAutomacaoAtiva() then
-            humanoid.PlatformStand = false
-        end
-    end
-end)
--- ================= FUNÇÃO DE BUSCA DE ALVOS (FARM) ================= --
-local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
-    local pasta = Workspace:FindFirstChild(nomePasta)
-    local rootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-    
-    if pasta and rootPart then
-        local alvo, menorDistancia = nil, math.huge
-        for _, item in pairs(pasta:GetChildren()) do
-            if item.Name == nomeItem then
-                local targetPart = item:IsA("BasePart") and item or item:FindFirstChildWhichIsA("BasePart")
-                if targetPart then
-                    local colValida = true
-                    if corObrigatoria and targetPart.BrickColor.Name ~= "Deep orange" then 
-                        colValida = false 
-                    end
-                    if colValida then
-                        local dist = (rootPart.Position - targetPart.Position).Magnitude
-                        if dist < menorDistancia then 
-                            menorDistancia = dist
-                            alvo = targetPart 
-                        end
-                    end
-                end
-            end
-        end
-        return alvo
-    end
-    return nil
-end
-
--- Loop Principal do Fly Farm
-task.spawn(function()
-    while true do
-        local alvoAtual = nil
-        if _G.AutoFarmGoldenBerry then 
-            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", true)
-        elseif _G.AutoFarmAlien then 
-            alvoAtual = pegarAlvoMaisProximo("Aliens", "Alien")
-        elseif _G.AutoFarmBerry then 
-            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry") 
-        end
-        
-        if alvoAtual then 
-            voarAteAlvoSeparado(alvoAtual, _G.VelocidadeFarm) 
-        end
-        task.wait(0.1)
+        task.wait(0.5)
     end
 end)
 
--- ================= MOTOR DE PERSEGUIÇÃO DE PLAYERS (MÉTODO CFRAME) ================= --
-local function obterListaPlayers()
-    local lista = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player then 
-            table.insert(lista, p.Name) 
-        end
-    end
-    return lista
-end
+-- ================= INTERFACE GRÁFICA ================= --
 
-task.spawn(function()
-    while true do
-        if _G.PerseguirPlayer then
-            local tPlayer = Players:FindFirstChild(_G.PlayerAlvo)
-            
-            -- Inteligência de busca por players vivos
-            if _G.ModoAleatorioPlayers or not tPlayer or not tPlayer.Character or not tPlayer.Character:FindFirstChild("Humanoid") or tPlayer.Character.Humanoid.Health <= 0 then
-                local vivos = {}
-                for _, p in pairs(Players:GetPlayers()) do
-                    if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character.Humanoid.Health > 0 then
-                        table.insert(vivos, p)
-                    end
-                end
-                if #vivos > 0 then
-                    local escolhido = vivos[math.random(1, #vivos)]
-                    _G.PlayerAlvo = escolhido.Name
-                    tPlayer = escolhido
-                end
-            end
+FarmTab:CreateSection("🧲 MODO ÍMÃ (TRAZ A FRUTA ATÉ VOCÊ)")
 
-            -- Perseguição implacável por CFrame Livre de Trava Física
-            if tPlayer and tPlayer.Character and tPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                local tRoot = tPlayer.Character.HumanoidRootPart
-                local rootPart = player.Character and player.Character:FindFirstChild("HumanoidRootPart")
-                local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-
-                if rootPart and humanoid then
-                    ativarNoclipLocal(true)
-                    
-                    -- Zera forças para garantir que nada puxe o boneco para trás
-                    rootPart.AssemblyLinearVelocity = Vector3.new(0,0,0)
-                    rootPart.AssemblyAngularVelocity = Vector3.new(0,0,0)
-
-                    -- Define a coordenada exata atrás do alvo
-                    local posicaoAlvo = (tRoot.CFrame * CFrame.new(0, 0, _G.DistanciaCostas)).Position
-                    local direcao = (posicaoAlvo - rootPart.Position)
-                    local distancia = direcao.Magnitude
-
-                    if distancia > 0.5 then
-                        -- Avança um passo calculado em CFrame na taxa de atualização
-                        local passo = direcao.Unit * (_G.VelocidadePerseguicao * 0.02)
-                        if passo.Magnitude > distancia then
-                            passo = direcao
-                        end
-                        rootPart.CFrame = CFrame.lookAt(rootPart.Position + passo, tRoot.Position)
-                    else
-                        -- Trava perfeitamente na nuca se já estiver muito perto
-                        rootPart.CFrame = CFrame.new(posicaoAlvo, tRoot.Position)
-                    end
-                end
-            end
-        else
-            -- Restaura o estado ao desligar o botão
-            local humanoid = player.Character and player.Character:FindFirstChild("Humanoid")
-            if humanoid and humanoid.PlatformStand and not _G.VooLivreAtivo then
-                humanoid.PlatformStand = false
-                ativarNoclipLocal(false)
-            end
-        end
-        task.wait(0.02)
-    end
-end)
-
--- ================= CONSTRUÇÃO DA INTERFACE VISUAL (GUI RAYFIELD) ================= --
-FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (CFRAME INQUEBRÁVEL)")
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡", CurrentValue = false, Callback = function(v) _G.AutoFarmGoldenBerry = v end})
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(v) _G.AutoFarmAlien = v end})
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(v) _G.AutoFarmBerry = v end})
-FarmTab:CreateToggle({Name = "Modo Altura Máxima (Bypass de Paredes)", CurrentValue = false, Callback = function(v) _G.BypassWalls = v end})
-FarmTab:CreateSlider({Name = "Velocidade do Farm (CFrame)", Range = {10, 70}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(v) _G.VelocidadeFarm = v end})
-FarmTab:CreateSlider({Name = "Altura do Voo Rasante", Range = {2, 20}, Increment = 1, Suffix = "Studs", CurrentValue = 6, Callback = function(v) _G.AlturaHover = v end})
-
-FlyTab:CreateSection("🛸 CONTROLE DE VOO LIVRE CLÁSSICO")
-FlyTab:CreateToggle({Name = "Ativar Voo Manual", CurrentValue = false, Callback = function(v) _G.VooLivreAtivo = v end})
-FlyTab:CreateSlider({Name = "Velocidade", Range = {15, 50}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(v) _G.VelocidadeVoo = v end})
-
-PlayersTab:CreateSection("👤 SELEÇÃO DE JOGADOR")
-local PlayerDropdown = PlayersTab:CreateDropdown({
-   Name = "Escolher Player Alvo",
-   Options = obterListaPlayers(),
-   CurrentOption = "",
-   MultipleOptions = false,
-   Callback = function(Option) _G.PlayerAlvo = type(Option) == "table" and Option[1] or Option end,
+FarmTab:CreateToggle({
+   Name = "Ativar Ímã de Berries (Deslizar)",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.ImaDeBerry = Value
+   end,
 })
-PlayersTab:CreateButton({Name = "🔄 Atualizar Lista de Players", Callback = function() PlayerDropdown:Refresh(obterListaPlayers()) end})
 
-PlayersTab:CreateSection("⚙️ CONTROLE DE PERSEGUIÇÃO (SISTEMA CFRAME)")
-PlayersTab:CreateToggle({Name = "ATIVAR SEGUIR PLAYER 👥", CurrentValue = false, Callback = function(v) _G.PerseguirPlayer = v end})
-PlayersTab:CreateToggle({Name = "Modo Aleatório (Trocar de Player)", CurrentValue = false, Callback = function(v) _G.ModoAleatorioPlayers = v end})
-PlayersTab:CreateSlider({Name = "Distância das Costas", Range = {2, 15}, Increment = 1, Suffix = "Studs", CurrentValue = 4, Callback = function(v) _G.DistanciaCostas = v end})
-PlayersTab:CreateSlider({Name = "Velocidade de Perseguição", Range = {15, 80}, Increment = 1, Suffix = "Vel", CurrentValue = 35, Callback = function(v) _G.VelocidadePerseguicao = v end})
+FarmTab:CreateSlider({
+   Name = "Velocidade do Ímã",
+   Range = {20, 100},
+   Increment = 5,
+   Suffix = "Vel",
+   CurrentValue = 40,
+   Callback = function(Value)
+       _G.VelocidadeImaBerry = Value
+   end,
+})
 
-Rayfield:LoadConfiguration()
+FarmTab:CreateSection("⚡ MODO HITBOX GIGANTE (AUMENTAR FRUTA)")
+
+FarmTab:CreateToggle({
+   Name = "Expandir Hitbox das Berries (15 Studs)",
+   CurrentValue = false,
+   Callback = function(Value)
+       _G.HitboxGigante = Value
+   end,
+})
