@@ -1,3 +1,4 @@
+-- ================= PARTE 1: INICIALIZAÇÃO E CONFIGURAÇÕES ================= --
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Workspace = game:GetService("Workspace")
 local Players = game:GetService("Players")
@@ -5,9 +6,9 @@ local RunService = game:GetService("RunService")
 local player = Players.LocalPlayer
 
 local Window = Rayfield:CreateWindow({
-   Name = "Farm v8 (Eixos Separados) 🚀🍓👽🟡",
+   Name = "Farm v9 (CFrame Total) 🚀🍓👽🟡",
    LoadingTitle = "Iniciando Sistema...",
-   LoadingSubtitle = "Física Horizontal + CFrame Vertical",
+   LoadingSubtitle = "CFrame Horizontal + Vertical (Anti-Travamento)",
    ConfigurationSaving = { Enabled = false },
    KeySystem = false
 })
@@ -16,7 +17,7 @@ local FarmTab = Window:CreateTab("🍓/👽 Fly Farm", 4483362458)
 local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
 local PlayersTab = Window:CreateTab("👥 Players", 4483362458)
 
--- ================= VARIÁVEIS GLOBAIS DE CONTROLE ================= --
+-- Variables globais de controle
 _G.AutoFarmGoldenBerry = false
 _G.AutoFarmBerry = false
 _G.AutoFarmAlien = false
@@ -35,7 +36,7 @@ _G.ModoAleatorioPlayers = false
 _G.DistanciaCostas = 4 
 _G.VelocidadePerseguicao = 35
 
--- ================= NOCLIP LOCAL PARA EVITAR COLISÕES ================= --
+-- Noclip local para evitar colisões com o mapa
 local noclipConnection = nil
 local function ativarNoclipLocal(status)
     if status then
@@ -58,14 +59,15 @@ local function ativarNoclipLocal(status)
         end
     end
 end
+-- ================= PARTE 2: MOTORES DE MOVIMENTAÇÃO (CFRAME + NOCLIP CONTÍNUO) ================= --
 
--- ================= MOVIMENTAÇÃO DINÂMICA: FÍSICA HORIZONTAL + CFRAME VERTICAL ================= --
 local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
     if not rootPart or not humanoid or not alvo or not alvo.Parent then return end
 
+    -- Liga o noclip local quando o farm começa
     ativarNoclipLocal(true)
     humanoid.PlatformStand = true 
 
@@ -77,7 +79,20 @@ local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
     while _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry do
         if not alvo or not alvo.Parent or not rootPart then break end
 
-        -- 1️⃣ CONTROLE VERTICAL (CFrame para Subir sem Engasgar)
+        -- 🌟 NOCLIP CONTÍNUO: Desativa a colisão do corpo a cada frame para não travar em nada
+        if character then
+            for _, part in pairs(character:GetChildren()) do
+                if part:IsA("BasePart") then
+                    part.CanCollide = false
+                end
+            end
+        end
+
+        -- Força a física do jogo a zerar para o voo nativo não atrapalhar
+        rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+        rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
+        -- 1️⃣ CFrame Vertical (Subida e Descida)
         local alturaAtual = rootPart.Position.Y
         local diferencaY = alturaAlvo - alturaAtual
         
@@ -89,41 +104,54 @@ local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
             else
                 alturaAtual = alturaAtual + passoY
             end
-            rootPart.CFrame = CFrame.new(rootPart.Position.X, alturaAtual, rootPart.Position.Z) * rootPart.CFrame.Rotation
         end
 
-        -- 2️⃣ CONTROLE HORIZONTAL (Física de Velocidade no Plano)
-        local destinoHorizontal = Vector3.new(alvo.Position.X, rootPart.Position.Y, alvo.Position.Z)
-        local direcaoHorizontal = (destinoHorizontal - rootPart.Position)
+         -- 2️⃣ CFrame Horizontal Puro (Frente, Trás, Lados sem Física)
+        local destinoHorizontal = Vector3.new(alvo.Position.X, alturaAtual, alvo.Position.Z)
+        local direcaoHorizontal = (destinoHorizontal - Vector3.new(rootPart.Position.X, alturaAtual, rootPart.Position.Z))
         local distHorizontal = direcaoHorizontal.Magnitude
 
+        -- Condição de parada (chegou perto da berry)
         if distHorizontal < 1.5 and math.abs(rootPart.Position.Y - alturaAlvo) < 1.5 then 
             break 
         end
 
-        if distHorizontal > 0.5 then
-            local olharSeguro = Vector3.new(alvo.Position.X, rootPart.Position.Y, alvo.Position.Z)
-            rootPart.CFrame = CFrame.lookAt(rootPart.Position, olharSeguro)
-        end
+        -- LIMITADOR DE VELOCIDADE: Garante que mesmo que a variável quebre, a velocidade horizontal fica travada entre 25 e 27
+        local velHorizontalSegura = math.clamp(_G.VelocidadeFarm, 25, 27)
 
-        rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
+        local novaPosicao = rootPart.Position
         if distHorizontal > 0.1 then
             local direcaoUnit = direcaoHorizontal.Unit
-            rootPart.AssemblyLinearVelocity = Vector3.new(direcaoUnit.X * velHorizontal, 0, direcaoUnit.Z * velHorizontal)
-        else
-            rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+            -- Usando a velocidade limitada para mover o personagem
+            local passoXZ = direcaoUnit * velHorizontalSegura * 0.02
+            
+            if passoXZ.Magnitude > distHorizontal then
+                novaPosicao = destinoHorizontal
+            else
+                novaPosicao = rootPart.Position + passoXZ
+            end
         end
 
-        task.wait(0.02)
+        -- Aplica a posição calculada e faz olhar para a Berry
+        if distHorizontal > 0.5 then
+            local olharSeguro = Vector3.new(alvo.Position.X, alturaAtual, alvo.Position.Z)
+            rootPart.CFrame = CFrame.lookAt(Vector3.new(novaPosicao.X, alturaAtual, novaPosicao.Z), olharSeguro)
+        else
+            rootPart.CFrame = CFrame.new(Vector3.new(novaPosicao.X, alturaAtual, novaPosicao.Z), rootPart.CFrame.LookVector)
+        end
+
+        -- 🚀 Sincroniza com a taxa de atualização do jogo (Fluidez Máxima)
+        RunService.Heartbeat:Wait()
     end
 
     if rootPart then rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
     if humanoid then humanoid.PlatformStand = false end
+    
+    -- Desliga o noclip quando o farm termina
     ativarNoclipLocal(false)
 end
 
--- ================= FUNÇÃO DE BUSCA DE ALVOS ================= --
+-- Função de busca de alvos próximos
 local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
     local pasta = Workspace:FindFirstChild(nomePasta)
     local character = player.Character
@@ -158,7 +186,7 @@ local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
     return nil
 end
 
--- ================= LOOP DO FLY FARM ================= --
+-- Loop principal do Fly Farm
 task.spawn(function()
     while true do
         local alvoAtual = nil
@@ -179,7 +207,8 @@ task.spawn(function()
     end
 end)
 
--- ================= MOTOR DE VOO MANUAL (BODYVELOCITY) ================= --
+-- ================= PARTE 3: VOO MANUAL, PERSEGUIÇÃO E INTERFACE UI (CORRIGIDA) ================= --
+
 local bodyVelocity = nil
 local bodyGyro = nil
 
@@ -208,7 +237,6 @@ RunService.RenderStepped:Connect(function()
         end
 
         bodyGyro.CFrame = camera.CFrame
-
         rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
@@ -216,7 +244,6 @@ RunService.RenderStepped:Connect(function()
         if direcao.Magnitude > 0 then
             local vetorCamera = camera.CFrame.LookVector
             local direcaoVoo = Vector3.new(direcao.X, vetorCamera.Y, direcao.Z)
-            
             bodyVelocity.Velocity = direcaoVoo.Unit * _G.VelocidadeVoo
         else
             bodyVelocity.Velocity = Vector3.new(0, 0, 0)
@@ -232,13 +259,10 @@ RunService.RenderStepped:Connect(function()
     end
 end)
 
--- ================= SISTEMA DE PERSEGUIÇÃO DE PLAYERS (VIVOS) ================= --
 local function obterListaPlayers()
     local lista = {}
     for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player then
-            table.insert(lista, p.Name)
-        end
+        if p ~= player then table.insert(lista, p.Name) end
     end
     return lista
 end
@@ -247,7 +271,6 @@ task.spawn(function()
     while true do
         if _G.PerseguirPlayer then
             local tPlayer = Players:FindFirstChild(_G.PlayerAlvo)
-            
             if _G.ModoAleatorioPlayers or not tPlayer or not tPlayer.Character or not tPlayer.Character:FindFirstChild("Humanoid") or tPlayer.Character.Humanoid.Health <= 0 then
                 local todosPlayers = {}
                 for _, p in pairs(Players:GetPlayers()) do
@@ -255,7 +278,6 @@ task.spawn(function()
                         table.insert(todosPlayers, p)
                     end
                 end
-                
                 if #todosPlayers > 0 then
                     local escolhido = todosPlayers[math.random(1, #todosPlayers)]
                     if _G.ModoAleatorioPlayers or _G.PlayerAlvo == "" then
@@ -276,11 +298,9 @@ task.spawn(function()
                 if tRoot and tHumanoid and tHumanoid.Health > 0 then
                     ativarNoclipLocal(true)
                     humanoid.PlatformStand = true
-
                     local posicaoCostas = (tRoot.CFrame * CFrame.new(0, 0, _G.DistanciaCostas)).Position
                     local direcaoIr = (posicaoCostas - rootPart.Position)
                     local distanciaAtual = direcaoIr.Magnitude
-
                     rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
                     if distanciaAtual > 0.5 then
@@ -305,134 +325,39 @@ task.spawn(function()
 end)
 
 -- ================= INTERFACE VISUAL (RAYFIELD) ================= --
-FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (HÍBRIDO DE EIXOS)")
+FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (CFRAME TOTAL)")
+FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
+FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
+FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
+FarmTab:CreateToggle({Name = "Modo Altura Máxima (Bypass de Paredes)", CurrentValue = false, Callback = function(Value) _G.BypassWalls = Value end})
 
-FarmTab:CreateToggle({
-   Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡",
-   CurrentValue = false,
-   Callback = function(Value) _G.AutoFarmGoldenBerry = Value end,
-})
-
-FarmTab:CreateToggle({
-   Name = "ATIVAR FARM DE ALIEN 👽",
-   CurrentValue = false,
-   Callback = function(Value) _G.AutoFarmAlien = Value end,
-})
-
-FarmTab:CreateToggle({
-   Name = "ATIVAR FARM DE BERRY (COMUM) 🍓",
-   CurrentValue = false,
-   Callback = function(Value) _G.AutoFarmBerry = Value end,
-})
-
-FarmTab:CreateToggle({
-   Name = "Modo Altura Máxima (Bypass de Paredes)",
-   CurrentValue = false,
-   Callback = function(Value) _G.BypassWalls = Value end,
-})
-
+-- SLIDER CORRIGIDO: Limita estritamente entre 25 e 27 (Recomendado 26)
 FarmTab:CreateSlider({
-   Name = "Velocidade Física (Movimento Horizontal)",
-   Range = {10, 60},
+   Name = "Velocidade Horizontal (Recomendado: 26)",
+   Range = {25, 27},
    Increment = 1,
    Suffix = "Vel",
-   CurrentValue = 33, 
-   Callback = function(Value) _G.VelocidadeFarm = Value end,
+   CurrentValue = 26,
+   Callback = function(Value) 
+       _G.VelocidadeFarm = Value 
+   end,
 })
 
-FarmTab:CreateSlider({
-   Name = "Velocidade CFrame (Subida / Descida)",
-   Range = {10, 50},
-   Increment = 1,
-   Suffix = "Vel Y",
-   CurrentValue = 24, 
-   Callback = function(Value) _G.VelocidadeSubidaCFrame = Value end,
-})
-
-FarmTab:CreateSlider({
-   Name = "Altura do Voo Rasante (Hover)",
-   Range = {2, 20},
-   Increment = 1,
-   Suffix = "Studs",
-   CurrentValue = 6, 
-   Callback = function(Value) _G.AlturaHover = Value end,
-})
-
-FarmTab:CreateSlider({
-   Name = "Altura de Rota Segura (Por Cima)",
-   Range = {80, 180},
-   Increment = 5,
-   Suffix = "Studs",
-   CurrentValue = 110,
-   Callback = function(Value) _G.AlturaSeguraCeu = Value end,
-})
+FarmTab:CreateSlider({Name = "Velocidade Vertical (CFrame)", Range = {10, 50}, Increment = 1, Suffix = "Vel Y", CurrentValue = 24, Callback = function(Value) _G.VelocidadeSubidaCFrame = Value end})
+FarmTab:CreateSlider({Name = "Altura do Voo Rasante (Hover)", Range = {2, 20}, Increment = 1, Suffix = "Studs", CurrentValue = 6, Callback = function(Value) _G.AlturaHover = Value end})
+FarmTab:CreateSlider({Name = "Altura de Rota Segura", Range = {80, 180}, Increment = 5, Suffix = "Studs", CurrentValue = 110, Callback = function(Value) _G.AlturaSeguraCeu = Value end})
 
 FlyTab:CreateSection("🛸 CONTROLE DE VOO LIVRE")
-
-FlyTab:CreateToggle({
-   Name = "Ativar Voo Manual",
-   CurrentValue = false,
-   Callback = function(Value) _G.VooLivreAtivo = Value end,
-})
-
-FlyTab:CreateSlider({
-   Name = "Velocidade",
-   Range = {15, 50},
-   Increment = 1,
-   Suffix = "Vel",
-   CurrentValue = 33, 
-   Callback = function(Value) _G.VelocidadeVoo = Value end,
-})
+FlyTab:CreateToggle({Name = "Ativar Voo Manual", CurrentValue = false, Callback = function(Value) _G.VooLivreAtivo = Value end})
+FlyTab:CreateSlider({Name = "Velocidade", Range = {15, 50}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(Value) _G.VelocidadeVoo = Value end})
 
 PlayersTab:CreateSection("👤 SELEÇÃO DE SESSÃO")
-
-local PlayerDropdown = PlayersTab:CreateDropdown({
-   Name = "Escolher Player Específico",
-   Options = obterListaPlayers(),
-   CurrentOption = "",
-   MultipleOptions = false,
-   Callback = function(Option)
-       _G.PlayerAlvo = type(Option) == "table" and Option[1] or Option
-   end,
-})
-
-PlayersTab:CreateButton({
-   Name = "🔄 Atualizar Lista de Players",
-   Callback = function()
-       PlayerDropdown:Refresh(obterListaPlayers())
-   end,
-})
-
-PlayersTab:CreateSection("⚙️ CONFIGURAÇÃO DE ASSÉDIO / SEGUIR")
-
-PlayersTab:CreateToggle({
-   Name = "ATIVAR SEGUIR PLAYER 👥",
-   CurrentValue = false,
-   Callback = function(Value) _G.PerseguirPlayer = Value end,
-})
-
-PlayersTab:CreateToggle({
-   Name = "Modo Aleatório (Ficar Pulando de Player)",
-   CurrentValue = false,
-   Callback = function(Value) _G.ModoAleatorioPlayers = Value end,
-})
-
-PlayersTab:CreateSlider({
-   Name = "Distância das Costas",
-   Range = {2, 15},
-   Increment = 1,
-   Suffix = "Studs",
-   CurrentValue = 4, 
-   Callback = function(Value) _G.DistanciaCostas = Value end,
-})
-
-PlayersTab:CreateSlider({
-   Name = "Velocidade de Perseguição",
-   Range = {15, 70},
-   Increment = 1,
-   Suffix = "Vel",
-   CurrentValue = 35, 
-   Callback = function(Value) _G.VelocidadePerseguicao = Value end,
-})
+local PlayerDropdown = PlayersTab:CreateDropdown({Name = "Escolher Player Específico", Options = obterListaPlayers(), CurrentOption = "", MultipleOptions = false, Callback = function(Option) _G.PlayerAlvo = type(Option) == "table" and Option[1] or Option end})
+PlayersTab:CreateButton({Name = "🔄 Atualizar Lista de Players", Callback = function() PlayerDropdown:Refresh(obterListaPlayers()) end})
+PlayersTab:CreateSection("⚙️ CONFIGURAÇÃO DE SEGUIR")
+PlayersTab:CreateToggle({Name = "ATIVAR SEGUIR PLAYER 👥", CurrentValue = false, Callback = function(Value) _G.PerseguirPlayer = Value end})
+PlayersTab:CreateToggle({Name = "Modo Aleatório", CurrentValue = false, Callback = function(Value) _G.ModoAleatorioPlayers = Value end})
+PlayersTab:CreateSlider({Name = "Distância das Costas", Range = {2, 15}, Increment = 1, Suffix = "Studs", CurrentValue = 4, Callback = function(Value) _G.DistanciaCostas = Value end})
+PlayersTab:CreateSlider({Name = "Velocidade de Perseguição", Range = {15, 70}, Increment = 1, Suffix = "Vel", CurrentValue = 35, Callback = function(Value) _G.VelocidadePerseguicao = Value end})
 
 Rayfield:LoadConfiguration()
