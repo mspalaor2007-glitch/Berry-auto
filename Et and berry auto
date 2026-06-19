@@ -59,6 +59,7 @@ local function ativarNoclipLocal(status)
         end
     end
 end
+
 -- ================= PARTE 2: MOTORES DE MOVIMENTAÇÃO (CFRAME + NOCLIP CONTÍNUO) ================= --
 
 local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
@@ -106,7 +107,7 @@ local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
             end
         end
 
-         -- 2️⃣ CFrame Horizontal Puro (Frente, Trás, Lados sem Física)
+        -- 2️⃣ CFrame Horizontal Puro (Frente, Trás, Lados sem Física)
         local destinoHorizontal = Vector3.new(alvo.Position.X, alturaAtual, alvo.Position.Z)
         local direcaoHorizontal = (destinoHorizontal - Vector3.new(rootPart.Position.X, alturaAtual, rootPart.Position.Z))
         local distHorizontal = direcaoHorizontal.Magnitude
@@ -116,14 +117,10 @@ local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
             break 
         end
 
-        -- LIMITADOR DE VELOCIDADE: Garante que mesmo que a variável quebre, a velocidade horizontal fica travada entre 25 e 27
-        local velHorizontalSegura = math.clamp(_G.VelocidadeFarm, 25, 27)
-
         local novaPosicao = rootPart.Position
         if distHorizontal > 0.1 then
             local direcaoUnit = direcaoHorizontal.Unit
-            -- Usando a velocidade limitada para mover o personagem
-            local passoXZ = direcaoUnit * velHorizontalSegura * 0.02
+            local passoXZ = direcaoUnit * velHorizontal * 0.02
             
             if passoXZ.Magnitude > distHorizontal then
                 novaPosicao = destinoHorizontal
@@ -207,7 +204,7 @@ task.spawn(function()
     end
 end)
 
--- ================= PARTE 3: VOO MANUAL, PERSEGUIÇÃO E INTERFACE UI (CORRIGIDA) ================= --
+-- ================= PARTE 3: VOO MANUAL, PERSEGUIÇÃO E INTERFACE UI ================= --
 
 local bodyVelocity = nil
 local bodyGyro = nil
@@ -324,25 +321,13 @@ task.spawn(function()
     end
 end)
 
--- ================= INTERFACE VISUAL (RAYFIELD) ================= --
+-- Painel Visual
 FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (CFRAME TOTAL)")
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
 FarmTab:CreateToggle({Name = "Modo Altura Máxima (Bypass de Paredes)", CurrentValue = false, Callback = function(Value) _G.BypassWalls = Value end})
-
--- SLIDER CORRIGIDO: Limita estritamente entre 25 e 27 (Recomendado 26)
-FarmTab:CreateSlider({
-   Name = "Velocidade Horizontal (Recomendado: 26)",
-   Range = {25, 27},
-   Increment = 1,
-   Suffix = "Vel",
-   CurrentValue = 26,
-   Callback = function(Value) 
-       _G.VelocidadeFarm = Value 
-   end,
-})
-
+FarmTab:CreateSlider({Name = "Velocidade Horizontal (CFrame)", Range = {10, 60}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(Value) _G.VelocidadeFarm = Value end})
 FarmTab:CreateSlider({Name = "Velocidade Vertical (CFrame)", Range = {10, 50}, Increment = 1, Suffix = "Vel Y", CurrentValue = 24, Callback = function(Value) _G.VelocidadeSubidaCFrame = Value end})
 FarmTab:CreateSlider({Name = "Altura do Voo Rasante (Hover)", Range = {2, 20}, Increment = 1, Suffix = "Studs", CurrentValue = 6, Callback = function(Value) _G.AlturaHover = Value end})
 FarmTab:CreateSlider({Name = "Altura de Rota Segura", Range = {80, 180}, Increment = 5, Suffix = "Studs", CurrentValue = 110, Callback = function(Value) _G.AlturaSeguraCeu = Value end})
