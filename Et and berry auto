@@ -259,7 +259,7 @@ RunService.RenderStepped:Connect(function()
         if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
         if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
         
-        if humanoid and humanoid.PlatformStand and not _G.PerseguirPlayer then
+        if humanoid and humanoid.PlatformStand and not _G.PerseguirPlayer and not _G.AutoFarmGoldenBerry and not _G.AutoFarmAlien and not _G.AutoFarmBerry and not _G.AutoFarmMegaBerry then
             humanoid.PlatformStand = false
             ativarNoclipLocal(false)
         end
@@ -274,66 +274,105 @@ local function obterListaPlayers()
     return lista
 end
 
+-- Motor de Perseguição Atualizado (Muda de Alvo APENAS se o Player Morrer)
 task.spawn(function()
     while true do
         if _G.PerseguirPlayer then
-            local tPlayer = Players:FindFirstChild(_G.PlayerAlvo)
-            if _G.ModoAleatorioPlayers or not tPlayer or not tPlayer.Character or not tPlayer.Character:FindFirstChild("Humanoid") or tPlayer.Character.Humanoid.Health <= 0 then
-                local todosPlayers = {}
-                for _, p in pairs(Players:GetPlayers()) do
-                    if p ~= player and p.Character and p.Character:FindFirstChild("Humanoid") and p.Character.Humanoid.Health > 0 then
-                        table.insert(todosPlayers, p)
+            local tPlayer = nil
+
+            -- 1️⃣ Definição do Alvo (Modo Aleatório ou Alvo Fixo)
+            if _G.ModoAleatorioPlayers then
+                -- Verifica se o alvo atual ainda existe, tem corpo e está VIVO
+                local alvoAtualValido = Players:FindFirstChild(_G.PlayerAlvo)
+                local estaVivo = false
+                
+                if alvoAtualValido and alvoAtualValido.Character and alvoAtualValido.Character:FindFirstChild("HumanoidRootPart") then
+                    local hum = alvoAtualValido.Character:FindFirstChildWhichIsA("Humanoid")
+                    if hum and hum.Health > 0 then
+                        estaVivo = true
                     end
                 end
-                if #todosPlayers > 0 then
-                    local escolhido = todosPlayers[math.random(1, #todosPlayers)]
-                    if _G.ModoAleatorioPlayers or _G.PlayerAlvo == "" then
+
+                -- SE NÃO ESTIVER VIVO (OU SE NÃO TIVER ALVO): Escolhe um novo player vivo aleatório
+                if not estaVivo then
+                    local todosPlayersVivos = {}
+                    for _, p in pairs(Players:GetPlayers()) do
+                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildWhichIsA("Humanoid") and p.Character:FindFirstChildWhichIsA("Humanoid").Health > 0 then
+                            table.insert(todosPlayersVivos, p)
+                        end
+                    end
+                    
+                    if #todosPlayersVivos > 0 then
+                        local escolhido = todosPlayersVivos[math.random(1, #todosPlayersVivos)]
                         _G.PlayerAlvo = escolhido.Name
                         tPlayer = escolhido
+                    else
+                        tPlayer = nil
                     end
+                else
+                    -- Se o atual continua vivo, mantém o foco nele rigidamente
+                    tPlayer = alvoAtualValido
                 end
+            else
+                -- Modo de Alvo Fixo Manual
+                tPlayer = Players:FindFirstChild(_G.PlayerAlvo)
             end
 
+            -- 2️⃣ Execução da Movimentação Estilo CFrame Farm (Fica colado enquanto estiver vivo)
             local character = player.Character
             local rootPart = character and character:FindFirstChild("HumanoidRootPart")
             local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
 
             if tPlayer and tPlayer.Character and rootPart and humanoid then
                 local tRoot = tPlayer.Character:FindFirstChild("HumanoidRootPart")
-                local tHumanoid = tPlayer.Character:FindFirstChild("Humanoid")
+                local tHumanoid = tPlayer.Character:FindFirstChildWhichIsA("Humanoid")
 
                 if tRoot and tHumanoid and tHumanoid.Health > 0 then
-                    ativarNoclipLocal(true)
                     humanoid.PlatformStand = true
+                    rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                    rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
+
                     local posicaoCostas = (tRoot.CFrame * CFrame.new(0, 0, _G.DistanciaCostas)).Position
                     local direcaoIr = (posicaoCostas - rootPart.Position)
                     local distanciaAtual = direcaoIr.Magnitude
-                    rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
                     if distanciaAtual > 0.5 then
-                        rootPart.AssemblyLinearVelocity = direcaoIr.Unit * _G.VelocidadePerseguicao
-                        rootPart.CFrame = CFrame.lookAt(rootPart.Position, Vector3.new(tRoot.Position.X, rootPart.Position.Y, tRoot.Position.Z))
+                        local direcaoUnit = direcaoIr.Unit
+                        local passo = direcaoUnit * _G.VelocidadePerseguicao * 0.02
+                        
+                        local novaPosicao = rootPart.Position + passo
+                        if passo.Magnitude > distanciaAtual then
+                            novaPosicao = posicaoCostas
+                        end
+
+                        rootPart.CFrame = CFrame.lookAt(novaPosicao, Vector3.new(tRoot.Position.X, novaPosicao.Y, tRoot.Position.Z))
                     else
-                        rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+                        -- Segue a rotação exata e gruda na posição enquanto ele se move vivo
                         rootPart.CFrame = CFrame.new(posicaoCostas, tRoot.Position)
                     end
+                else
+                    -- Se o alvo morreu/resgatou neste frame, reseta o alvo para o próximo ciclo escolher outro
+                    if _G.ModoAleatorioPlayers then _G.PlayerAlvo = "" end
                 end
+            else
+                -- Se o player saiu do jogo ou sumiu do Workspace
+                if _G.ModoAleatorioPlayers then _G.PlayerAlvo = "" end
             end
         else
             local character = player.Character
             local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-            if humanoid and humanoid.PlatformStand and not _G.VooLivreAtivo then
+            if humanoid and humanoid.PlatformStand and not _G.VooLivreAtivo and not _G.AutoFarmBerry and not _G.AutoFarmAlien and not _G.AutoFarmGoldenBerry and not _G.AutoFarmMegaBerry then
                 humanoid.PlatformStand = false
-                ativarNoclipLocal(false)
             end
         end
-        task.wait(0.02)
+        
+        RunService.Heartbeat:Wait()
     end
 end)
 
 -- Painel Visual
 FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (CFRAME TOTAL)")
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE MEGA BERRY (XP) 🔴", CurrentValue = false, Callback = function(Value) _G.AutoFarmMegaBerry = Value end}) -- 🌟 Nova opção adicionada
+FarmTab:CreateToggle({Name = "ATIVAR FARM DE MEGA BERRY (XP) 🔴", CurrentValue = false, Callback = function(Value) _G.AutoFarmMegaBerry = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
