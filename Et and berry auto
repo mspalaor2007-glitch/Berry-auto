@@ -21,7 +21,7 @@ local PlayersTab = Window:CreateTab("👥 Players", 4483362458)
 _G.AutoFarmGoldenBerry = false
 _G.AutoFarmBerry = false
 _G.AutoFarmAlien = false
-_G.VelocidadeFarm = 33 
+_G.VelocidadeFarm = 26
 _G.VelocidadeSubidaCFrame = 24 
 _G.BypassWalls = false
 _G.AlturaHover = 6 
@@ -327,7 +327,7 @@ FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡", CurrentValu
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
 FarmTab:CreateToggle({Name = "Modo Altura Máxima (Bypass de Paredes)", CurrentValue = false, Callback = function(Value) _G.BypassWalls = Value end})
-FarmTab:CreateSlider({Name = "Velocidade Horizontal (CFrame)", Range = {10, 60}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(Value) _G.VelocidadeFarm = Value end})
+FarmTab:CreateSlider({Name = "Velocidade Horizontal (CFrame)", Range = {10, 60}, Increment = 1, Suffix = "Vel", CurrentValue = 26, Callback = function(Value) _G.VelocidadeFarm = Value end})
 FarmTab:CreateSlider({Name = "Velocidade Vertical (CFrame)", Range = {10, 50}, Increment = 1, Suffix = "Vel Y", CurrentValue = 24, Callback = function(Value) _G.VelocidadeSubidaCFrame = Value end})
 FarmTab:CreateSlider({Name = "Altura do Voo Rasante (Hover)", Range = {2, 20}, Increment = 1, Suffix = "Studs", CurrentValue = 6, Callback = function(Value) _G.AlturaHover = Value end})
 FarmTab:CreateSlider({Name = "Altura de Rota Segura", Range = {80, 180}, Increment = 5, Suffix = "Studs", CurrentValue = 110, Callback = function(Value) _G.AlturaSeguraCeu = Value end})
