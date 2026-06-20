@@ -18,10 +18,11 @@ local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
 local PlayersTab = Window:CreateTab("👥 Players", 4483362458)
 
 -- Variables globais de controle
+_G.AutoFarmMegaBerry = false -- 🌟 Nova variável adicionada
 _G.AutoFarmGoldenBerry = false
 _G.AutoFarmBerry = false
 _G.AutoFarmAlien = false
-_G.VelocidadeFarm = 26
+_G.VelocidadeFarm = 26 
 _G.VelocidadeSubidaCFrame = 24 
 _G.BypassWalls = false
 _G.AlturaHover = 6 
@@ -77,7 +78,7 @@ local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
         alturaAlvo = _G.AlturaSeguraCeu
     end
 
-    while _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry do
+    while _G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry do
         if not alvo or not alvo.Parent or not rootPart then break end
 
         -- 🌟 NOCLIP CONTÍNUO: Desativa a colisão do corpo a cada frame para não travar em nada
@@ -148,8 +149,8 @@ local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
     ativarNoclipLocal(false)
 end
 
--- Função de busca de alvos próximos
-local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
+-- Função de busca de alvos próximos (Atualizada para checar os Atributos do Dex Explorer)
+local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria, apenasMega)
     local pasta = Workspace:FindFirstChild(nomePasta)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -164,7 +165,14 @@ local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
                 
                 if targetPart then
                     local colValida = true
+                    
+                    -- Filtro para Golden Berry (Pela cor laranja "Deep orange")
                     if corObrigatoria and targetPart.BrickColor.Name ~= "Deep orange" then
+                        colValida = false
+                    end
+
+                    -- Filtro para Mega Berry (Lendo o atributo "BerryType" = "mega")
+                    if apenasMega and item:GetAttribute("BerryType") ~= "mega" then
                         colValida = false
                     end
 
@@ -183,17 +191,19 @@ local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria)
     return nil
 end
 
--- Loop principal do Fly Farm
+-- Loop principal do Fly Farm (Organizado por prioridades de ativação)
 task.spawn(function()
     while true do
         local alvoAtual = nil
         
-        if _G.AutoFarmGoldenBerry then
-            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", true)
+        if _G.AutoFarmMegaBerry then
+            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", false, true) -- Busca as frutinhas Mega por Atributo
+        elseif _G.AutoFarmGoldenBerry then
+            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", true, false) -- Busca as Goldens por cor
         elseif _G.AutoFarmAlien then
-            alvoAtual = pegarAlvoMaisProximo("Aliens", "Alien")
+            alvoAtual = pegarAlvoMaisProximo("Aliens", "Alien", false, false)
         elseif _G.AutoFarmBerry then
-            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry")
+            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", false, false) -- Busca as comuns
         end
 
         if alvoAtual then
@@ -323,6 +333,7 @@ end)
 
 -- Painel Visual
 FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (CFRAME TOTAL)")
+FarmTab:CreateToggle({Name = "ATIVAR FARM DE MEGA BERRY (XP) 🔴", CurrentValue = false, Callback = function(Value) _G.AutoFarmMegaBerry = Value end}) -- 🌟 Nova opção adicionada
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
