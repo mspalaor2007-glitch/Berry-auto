@@ -1,225 +1,238 @@
 -- ================= PARTE 1: INICIALIZAÇÃO E CONFIGURAÇÕES ================= --
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
-local Workspace = game:GetService("Workspace")
+
 local Players = game:GetService("Players")
+local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local TweenService = game:GetService("TweenService")
+
 local player = Players.LocalPlayer
 
-local Window = Rayfield:CreateWindow({
-   Name = "Farm v9 (CFrame Total) 🚀🍓👽🟡",
-   LoadingTitle = "Iniciando Sistema...",
-   LoadingSubtitle = "CFrame Horizontal + Vertical (Anti-Travamento)",
-   ConfigurationSaving = { Enabled = false },
-   KeySystem = false
-})
+-- Inicialização Segura das Variáveis Globais (_G)
+_G.AutoFarmMegaBerry = _G.AutoFarmMegaBerry or false
+_G.AutoFarmGoldenBerry = _G.AutoFarmGoldenBerry or false
+_G.AutoFarmAlien = _G.AutoFarmAlien or false
+_G.AutoFarmBerry = _G.AutoFarmBerry or false
+_G.BypassWalls = _G.BypassWalls or false
 
-local FarmTab = Window:CreateTab("🍓/👽 Fly Farm", 4483362458)
-local FlyTab = Window:CreateTab("✈️ Voo Manual", 4483362458)
-local PlayersTab = Window:CreateTab("👥 Players", 4483362458)
+_G.VelocidadeFarm = _G.VelocidadeFarm or 26
+_G.VelocidadeSubidaCFrame = _G.VelocidadeSubidaCFrame or 24
+_G.AlturaHover = _G.AlturaHover or 6
+_G.AlturaSeguraCeu = _G.AlturaSeguraCeu or 110
 
--- Variables globais de controle
-_G.AutoFarmMegaBerry = false -- 🌟 Nova variável adicionada
-_G.AutoFarmGoldenBerry = false
-_G.AutoFarmBerry = false
-_G.AutoFarmAlien = false
-_G.VelocidadeFarm = 26 
-_G.VelocidadeSubidaCFrame = 24 
-_G.BypassWalls = false
-_G.AlturaHover = 6 
-_G.AlturaSeguraCeu = 110
+-- Configurações de Voo Livre Adaptativo
+_G.VooLivreAtivo = _G.VooLivreAtivo or false
+_G.VelocidadeVoo = _G.VelocidadeVoo or 33
 
-_G.VooLivreAtivo = false
-_G.VelocidadeVoo = 33 
+-- Configurações de Combate e Perseguição
+_G.PerseguirPlayer = _G.PerseguirPlayer or false
+_G.ModoAleatorioPlayers = _G.ModoAleatorioPlayers or false
+_G.PlayerAlvo = _G.PlayerAlvo or ""
+_G.DistanciaCostas = _G.DistanciaCostas or 4
+_G.VelocidadePerseguicao = _G.VelocidadePerseguicao or 35
+_G.KillAuraAtivo = _G.KillAuraAtivo or false
 
-_G.PerseguirPlayer = false
-_G.PlayerAlvo = ""
-_G.ModoAleatorioPlayers = false
-_G.DistanciaCostas = 4 
-_G.VelocidadePerseguicao = 35
-
--- Noclip local para evitar colisões com o mapa
-local noclipConnection = nil
-local function ativarNoclipLocal(status)
-    if status then
-        if not noclipConnection then
-            noclipConnection = RunService.Stepped:Connect(function()
+-- Controle Interno de Noclip Estável
+local conexaoNoclip = nil
+local function ativarNoclipLocal(estado)
+    if estado then
+        if not conexaoNoclip then
+            conexaoNoclip = RunService.Stepped:Connect(function()
                 local character = player.Character
                 if character then
-                    for _, part in pairs(character:GetChildren()) do
-                        if part:IsA("BasePart") then
-                            part.CanCollide = false
+                    for _, parte in pairs(character:GetDescendants()) do
+                        if parte:IsA("BasePart") and parte.CanCollide then
+                            parte.CanCollide = false
                         end
                     end
                 end
             end)
         end
     else
-        if noclipConnection then
-            noclipConnection:Disconnect()
-            noclipConnection = nil
+        if conexaoNoclip then
+            conexaoNoclip:Disconnect()
+            conexaoNoclip = nil
+            
+            local character = player.Character
+            if character then
+                for _, name in pairs({"HumanoidRootPart", "UpperTorso", "LowerTorso", "Torso", "Head"}) do
+                    local p = character:FindFirstChild(name)
+                    if p and p:IsA("BasePart") then p.CanCollide = true end
+                end
+            end
         end
     end
 end
 
--- ================= PARTE 2: MOTORES DE MOVIMENTAÇÃO (CFRAME + NOCLIP CONTÍNUO) ================= --
+print("[INFO] Parte 1 carregada.")
+-- ================= PARTE 2: MOTOR DE BUSCA AVANÇADO DE ITENS ================= --
 
-local function voarAteAlvoSeparado(alvo, velHorizontal, velVertical)
+local flyStateEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("FlyStateChanged")
+
+-- Fallback de disparo duplo para garantir que o sinal de voo nativo do jogo seja atualizado
+local function gerenciarSinalVooFarm(ativo)
+    if _G.VooLivreAtivo then return end
+    if not flyStateEvent then return end
+    
+    pcall(function()
+        if ativo then
+            if flyStateEvent.ClassName == "RemoteEvent" then flyStateEvent:FireServer(true) else flyStateEvent:Fire(true) end
+        else
+            local nenhumFarmAtivo = not _G.AutoFarmMegaBerry and not _G.AutoFarmGoldenBerry and not _G.AutoFarmAlien and not _G.AutoFarmBerry and not _G.PerseguirPlayer
+            if nenhumFarmAtivo then
+                if flyStateEvent.ClassName == "RemoteEvent" then flyStateEvent:FireServer(false) else flyStateEvent:Fire(false) end
+            end
+        end
+    end)
+end
+
+-- Varredura agressiva recursiva para itens ocultos
+local function obterItemMaisProximoAvancado(tipoFarm)
+    local character = player.Character
+    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return nil end
+
+    local menorDistancia = math.huge
+    local itemEscolhido = nil
+    local alvosValidos = Workspace:GetDescendants()
+    
+    for i = 1, #alvosValidos do
+        local objeto = alvosValidos[i]
+        local valido = false
+        local nomeMinusculo = string.lower(objeto.Name)
+        
+        if tipoFarm == "Mega" then
+            if (string.find(nomeMinusculo, "mega") and string.find(nomeMinusculo, "berry")) or string.find(nomeMinusculo, "megaberry") or string.find(nomeMinusculo, "superberry") then
+                valido = true
+            end
+        elseif tipoFarm == "Golden" then
+            if string.find(nomeMinusculo, "gold") or string.find(nomeMinusculo, "moeda") or string.find(nomeMinusculo, "coin") or string.find(nomeMinusculo, "ouro") then
+                valido = true
+            end
+        elseif tipoFarm == "Alien" then
+            if string.find(nomeMinusculo, "alien") then
+                valido = true
+            end
+        elseif tipoFarm == "Comum" then
+            if string.find(nomeMinusculo, "berry") and not string.find(nomeMinusculo, "mega") and not string.find(nomeMinusculo, "golden") and not string.find(nomeMinusculo, "gold") and not string.find(nomeMinusculo, "coin") then
+                valido = true
+            end
+        end
+
+        if valido then
+            local parteAlvo = nil
+            if objeto:IsA("BasePart") then
+                parteAlvo = objeto
+            elseif objeto:IsA("Model") and objeto.PrimaryPart then
+                parteAlvo = objeto.PrimaryPart
+            else
+                parteAlvo = objeto:FindFirstChildWhichIsA("BasePart")
+            end
+
+            if parteAlvo and parteAlvo.Position then
+                local distancia = (rootPart.Position - parteAlvo.Position).Magnitude
+                if distancia < menorDistancia then
+                    menorDistancia = distancia
+                    itemEscolhido = parteAlvo
+                end
+            end
+        end
+    end
+
+    return itemEscolhido
+end
+
+print("[INFO] Parte 2 carregada.")
+-- ================= PARTE 3: MOTOR DE DESLOCAMENTO CFRAME FIXO E LOOP DO FARM ================= --
+
+-- Substituído deltaTime por um multiplicador estático estável (0.016) para corrigir travamentos de loop
+local function moverParaAlvoCFrame(parteAlvo, tipoFarm)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-    if not rootPart or not humanoid or not alvo or not alvo.Parent then return end
+    if not rootPart or not humanoid or not parteAlvo then return end
 
-    -- Liga o noclip local quando o farm começa
-    ativarNoclipLocal(true)
-    humanoid.PlatformStand = true 
+    humanoid.PlatformStand = true
+    rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
+    rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
-    local alturaAlvo = alvo.Position.Y + _G.AlturaHover - 5
-    if _G.BypassWalls then
-        alturaAlvo = _G.AlturaSeguraCeu
+    local alturaDefinida = _G.AlturaHover
+    if tipoFarm == "Mega" or tipoFarm == "Golden" then
+        alturaDefinida = 0 
     end
 
-    while _G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry do
-        if not alvo or not alvo.Parent or not rootPart then break end
+    local posicaoFinal = parteAlvo.Position + Vector3.new(0, alturaDefinida, 0)
+    local distanciaXy = Vector3.new(posicaoFinal.X, 0, posicaoFinal.Z) - Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z)
+    local distanciaTotal = (posicaoFinal - rootPart.Position).Magnitude
 
-        -- 🌟 NOCLIP CONTÍNUO: Desativa a colisão do corpo a cada frame para não travar em nada
-        if character then
-            for _, part in pairs(character:GetChildren()) do
-                if part:IsA("BasePart") then
-                    part.CanCollide = false
-                end
-            end
+    if _G.BypassWalls and distanciaXy.Magnitude > 15 then
+        if rootPart.Position.Y < _G.AlturaSeguraCeu then
+            rootPart.CFrame = rootPart.CFrame + Vector3.new(0, _G.VelocidadeSubidaCFrame * 0.016, 0)
+            return
         end
-
-        -- Força a física do jogo a zerar para o voo nativo não atrapalhar
-        rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-        -- 1️⃣ CFrame Vertical (Subida e Descida)
-        local alturaAtual = rootPart.Position.Y
-        local diferencaY = alturaAlvo - alturaAtual
         
-        if math.abs(diferencaY) > 0.3 then
-            local direcaoY = diferencaY > 0 and 1 or -1
-            local passoY = direcaoY * velVertical * 0.02 
-            if math.abs(passoY) > math.abs(diferencaY) then
-                alturaAtual = alturaAlvo
-            else
-                alturaAtual = alturaAtual + passoY
-            end
-        end
-
-        -- 2️⃣ CFrame Horizontal Puro (Frente, Trás, Lados sem Física)
-        local destinoHorizontal = Vector3.new(alvo.Position.X, alturaAtual, alvo.Position.Z)
-        local direcaoHorizontal = (destinoHorizontal - Vector3.new(rootPart.Position.X, alturaAtual, rootPart.Position.Z))
-        local distHorizontal = direcaoHorizontal.Magnitude
-
-        -- Condição de parada (chegou perto da berry)
-        if distHorizontal < 1.5 and math.abs(rootPart.Position.Y - alturaAlvo) < 1.5 then 
-            break 
-        end
-
-        local novaPosicao = rootPart.Position
-        if distHorizontal > 0.1 then
-            local direcaoUnit = direcaoHorizontal.Unit
-            local passoXZ = direcaoUnit * velHorizontal * 0.02
-            
-            if passoXZ.Magnitude > distHorizontal then
-                novaPosicao = destinoHorizontal
-            else
-                novaPosicao = rootPart.Position + passoXZ
-            end
-        end
-
-        -- Aplica a posição calculada e faz olhar para a Berry
-        if distHorizontal > 0.5 then
-            local olharSeguro = Vector3.new(alvo.Position.X, alturaAtual, alvo.Position.Z)
-            rootPart.CFrame = CFrame.lookAt(Vector3.new(novaPosicao.X, alturaAtual, novaPosicao.Z), olharSeguro)
+        local posicaoCeu = Vector3.new(posicaoFinal.X, _G.AlturaSeguraCeu, posicaoFinal.Z)
+        local direcaoCeu = (posicaoCeu - rootPart.Position)
+        
+        if direcaoCeu.Magnitude > 1 then
+            rootPart.CFrame = CFrame.new(rootPart.Position + (direcaoCeu.Unit * _G.VelocidadeFarm * 0.016), posicaoCeu)
+            return
         else
-            rootPart.CFrame = CFrame.new(Vector3.new(novaPosicao.X, alturaAtual, novaPosicao.Z), rootPart.CFrame.LookVector)
+            rootPart.CFrame = CFrame.new(rootPart.Position + (Vector3.new(0, -1, 0) * _G.VelocidadeSubidaCFrame * 0.016), posicaoFinal)
+            return
         end
-
-        -- 🚀 Sincroniza com a taxa de atualização do jogo (Fluidez Máxima)
-        RunService.Heartbeat:Wait()
     end
 
-    if rootPart then rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0) end
-    if humanoid then humanoid.PlatformStand = false end
-    
-    -- Desliga o noclip quando o farm termina
-    ativarNoclipLocal(false)
-end
-
--- Função de busca de alvos próximos (Atualizada para checar os Atributos do Dex Explorer)
-local function pegarAlvoMaisProximo(nomePasta, nomeItem, corObrigatoria, apenasMega)
-    local pasta = Workspace:FindFirstChild(nomePasta)
-    local character = player.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-
-    if pasta and rootPart then
-        local alvo = nil
-        local menorDistancia = math.huge
-
-        for _, item in pairs(pasta:GetChildren()) do
-            if item.Name == nomeItem then
-                local targetPart = item:IsA("BasePart") and item or item:FindFirstChildWhichIsA("BasePart")
-                
-                if targetPart then
-                    local colValida = true
-                    
-                    -- Filtro para Golden Berry (Pela cor laranja "Deep orange")
-                    if corObrigatoria and targetPart.BrickColor.Name ~= "Deep orange" then
-                        colValida = false
-                    end
-
-                    -- Filtro para Mega Berry (Lendo o atributo "BerryType" = "mega")
-                    if apenasMega and item:GetAttribute("BerryType") ~= "mega" then
-                        colValida = false
-                    end
-
-                    if colValida then
-                        local dist = (rootPart.Position - targetPart.Position).Magnitude
-                        if dist < menorDistancia then
-                            menorDistancia = dist
-                            alvo = targetPart
-                        end
-                    end
-                end
-            end
+    if distanciaTotal > 0.5 then
+        local direcao = (posicaoFinal - rootPart.Position).Unit
+        local passo = direcao * _G.VelocidadeFarm * 0.016
+        
+        if passo.Magnitude > distanciaTotal then
+            rootPart.CFrame = CFrame.new(posicaoFinal)
+        else
+            rootPart.CFrame = CFrame.new(rootPart.Position + passo)
         end
-        return alvo
+    else
+        rootPart.CFrame = CFrame.new(posicaoFinal)
     end
-    return nil
 end
 
--- Loop principal do Fly Farm (Organizado por prioridades de ativação)
-task.spawn(function()
-    while true do
-        local alvoAtual = nil
-        
-        if _G.AutoFarmMegaBerry then
-            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", false, true) -- Busca as frutinhas Mega por Atributo
-        elseif _G.AutoFarmGoldenBerry then
-            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", true, false) -- Busca as Goldens por cor
-        elseif _G.AutoFarmAlien then
-            alvoAtual = pegarAlvoMaisProximo("Aliens", "Alien", false, false)
-        elseif _G.AutoFarmBerry then
-            alvoAtual = pegarAlvoMaisProximo("Berries", "Berry", false, false) -- Busca as comuns
-        end
+RunService.Heartbeat:Connect(function()
+    local farmAtivo = _G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry
+    gerenciarSinalVooFarm(farmAtivo)
 
-        if alvoAtual then
-            voarAteAlvoSeparado(alvoAtual, _G.VelocidadeFarm, _G.VelocidadeSubidaCFrame)
-        end
-        
-        task.wait(0.1)
+    if not farmAtivo then return end
+
+    ativarNoclipLocal(true)
+    local alvoAtual = nil
+    local tipoAtual = ""
+
+    if _G.AutoFarmMegaBerry then 
+        tipoAtual = "Mega"
+        alvoAtual = obterItemMaisProximoAvancado("Mega")
+    elseif _G.AutoFarmGoldenBerry then 
+        tipoAtual = "Golden"
+        alvoAtual = obterItemMaisProximoAvancado("Golden")
+    elseif _G.AutoFarmAlien then 
+        tipoAtual = "Alien"
+        alvoAtual = obterItemMaisProximoAvancado("Alien")
+    elseif _G.AutoFarmBerry then 
+        tipoAtual = "Comum"
+        alvoAtual = obterItemMaisProximoAvancado("Comum") 
+    end
+
+    if alvoAtual then 
+        moverParaAlvoCFrame(alvoAtual, tipoAtual) 
     end
 end)
 
--- ================= PARTE 3: VOO MANUAL, PERSEGUIÇÃO E INTERFACE UI ================= --
+print("[INFO] Parte 3 carregada.")
+-- ================= PARTE 4: MOTOR DE VOO MANUAL UNIVERSAL ================= --
 
 local bodyVelocity = nil
 local bodyGyro = nil
 
-RunService.RenderStepped:Connect(function()
+RunService.Heartbeat:Connect(function()
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
@@ -227,23 +240,36 @@ RunService.RenderStepped:Connect(function()
 
     if _G.VooLivreAtivo and rootPart and humanoid and camera then
         ativarNoclipLocal(true)
+        
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+        humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+        humanoid.AutoRotate = false
         humanoid.PlatformStand = true
+        
+        if flyStateEvent then 
+            pcall(function()
+                if flyStateEvent.ClassName == "RemoteEvent" then flyStateEvent:FireServer(true) else flyStateEvent:Fire(true) end
+            end)
+        end
 
         if not bodyVelocity or bodyVelocity.Parent ~= rootPart then
             bodyVelocity = Instance.new("BodyVelocity")
+            bodyVelocity.Name = "MorphFlyVelocity"
             bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+            bodyVelocity.P = 1250
             bodyVelocity.Parent = rootPart
         end
         
         if not bodyGyro or bodyGyro.Parent ~= rootPart then
             bodyGyro = Instance.new("BodyGyro")
+            bodyGyro.Name = "MorphFlyGyro"
             bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-            bodyGyro.D = 100
-            bodyGyro.P = 10000
+            bodyGyro.D = 500
+            bodyGyro.P = 3000
             bodyGyro.Parent = rootPart
         end
 
-        bodyGyro.CFrame = camera.CFrame
         rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
         rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
@@ -255,16 +281,42 @@ RunService.RenderStepped:Connect(function()
         else
             bodyVelocity.Velocity = Vector3.new(0, 0, 0)
         end
+        
+        local lookVectHorizontal = camera.CFrame.LookVector * Vector3.new(1, 0, 1)
+        if lookVectHorizontal.Magnitude > 0.01 then
+            bodyGyro.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + lookVectHorizontal)
+        end
     else
         if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
         if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
         
-        if humanoid and humanoid.PlatformStand and not _G.PerseguirPlayer and not _G.AutoFarmGoldenBerry and not _G.AutoFarmAlien and not _G.AutoFarmBerry and not _G.AutoFarmMegaBerry then
-            humanoid.PlatformStand = false
-            ativarNoclipLocal(false)
+        local precisaDeVooAinda = _G.PerseguirPlayer or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry or _G.AutoFarmMegaBerry
+        
+        if not precisaDeVooAinda then
+            if flyStateEvent then 
+                pcall(function()
+                    if flyStateEvent.ClassName == "RemoteEvent" then flyStateEvent:FireServer(false) else flyStateEvent:Fire(false) end
+                end)
+            end
+            if humanoid and humanoid.PlatformStand then
+                humanoid.PlatformStand = false
+                ativarNoclipLocal(false)
+                
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
+                humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
+                humanoid.AutoRotate = true
+            end
         end
     end
 end)
+
+print("[INFO] Parte 4 carregada.")
+-- ================= PARTE 5: MOTOR DE PERSEGUIÇÃO E KILL AURA SIMULTÂNEO ================= --
+
+local attackEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("AttackRequest")
+local ultimoAtaque = 0
+local delayAtaque = 0.05 -- Ajustado para velocidade ideal de resposta de dano
 
 local function obterListaPlayers()
     local lista = {}
@@ -274,26 +326,22 @@ local function obterListaPlayers()
     return lista
 end
 
--- Motor de Perseguição Atualizado (Muda de Alvo APENAS se o Player Morrer)
 task.spawn(function()
     while true do
+        RunService.Heartbeat:Wait()
+        
         if _G.PerseguirPlayer then
             local tPlayer = nil
 
-            -- 1️⃣ Definição do Alvo (Modo Aleatório ou Alvo Fixo)
             if _G.ModoAleatorioPlayers then
-                -- Verifica se o alvo atual ainda existe, tem corpo e está VIVO
                 local alvoAtualValido = Players:FindFirstChild(_G.PlayerAlvo)
                 local estaVivo = false
                 
                 if alvoAtualValido and alvoAtualValido.Character and alvoAtualValido.Character:FindFirstChild("HumanoidRootPart") then
                     local hum = alvoAtualValido.Character:FindFirstChildWhichIsA("Humanoid")
-                    if hum and hum.Health > 0 then
-                        estaVivo = true
-                    end
+                    if hum and hum.Health > 0 then estaVivo = true end
                 end
 
-                -- SE NÃO ESTIVER VIVO (OU SE NÃO TIVER ALVO): Escolhe um novo player vivo aleatório
                 if not estaVivo then
                     local todosPlayersVivos = {}
                     for _, p in pairs(Players:GetPlayers()) do
@@ -301,7 +349,6 @@ task.spawn(function()
                             table.insert(todosPlayersVivos, p)
                         end
                     end
-                    
                     if #todosPlayersVivos > 0 then
                         local escolhido = todosPlayersVivos[math.random(1, #todosPlayersVivos)]
                         _G.PlayerAlvo = escolhido.Name
@@ -310,15 +357,12 @@ task.spawn(function()
                         tPlayer = nil
                     end
                 else
-                    -- Se o atual continua vivo, mantém o foco nele rigidamente
                     tPlayer = alvoAtualValido
                 end
             else
-                -- Modo de Alvo Fixo Manual
                 tPlayer = Players:FindFirstChild(_G.PlayerAlvo)
             end
 
-            -- 2️⃣ Execução da Movimentação Estilo CFrame Farm (Fica colado enquanto estiver vivo)
             local character = player.Character
             local rootPart = character and character:FindFirstChild("HumanoidRootPart")
             local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
@@ -328,7 +372,14 @@ task.spawn(function()
                 local tHumanoid = tPlayer.Character:FindFirstChildWhichIsA("Humanoid")
 
                 if tRoot and tHumanoid and tHumanoid.Health > 0 then
+                    ativarNoclipLocal(true)
                     humanoid.PlatformStand = true
+                    
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
+                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
+                    humanoid.AutoRotate = false
+
                     rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                     rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
@@ -338,24 +389,22 @@ task.spawn(function()
 
                     if distanciaAtual > 0.5 then
                         local direcaoUnit = direcaoIr.Unit
-                        local passo = direcaoUnit * _G.VelocidadePerseguicao * 0.02
-                        
+                        local passo = direcaoUnit * _G.VelocidadePerseguicao * 0.016
                         local novaPosicao = rootPart.Position + passo
-                        if passo.Magnitude > distanciaAtual then
-                            novaPosicao = posicaoCostas
-                        end
-
+                        if passo.Magnitude > distanciaAtual then novaPosicao = posicaoCostas end
                         rootPart.CFrame = CFrame.lookAt(novaPosicao, Vector3.new(tRoot.Position.X, novaPosicao.Y, tRoot.Position.Z))
                     else
-                        -- Segue a rotação exata e gruda na posição enquanto ele se move vivo
                         rootPart.CFrame = CFrame.new(posicaoCostas, tRoot.Position)
+                        
+                        if _G.KillAuraAtivo and attackEvent and (tick() - ultimoAtaque >= delayAtaque) then
+                            ultimoAtaque = tick()
+                            attackEvent:FireServer()
+                        end
                     end
                 else
-                    -- Se o alvo morreu/resgatou neste frame, reseta o alvo para o próximo ciclo escolher outro
                     if _G.ModoAleatorioPlayers then _G.PlayerAlvo = "" end
                 end
             else
-                -- Se o player saiu do jogo ou sumiu do Workspace
                 if _G.ModoAleatorioPlayers then _G.PlayerAlvo = "" end
             end
         else
@@ -365,15 +414,31 @@ task.spawn(function()
                 humanoid.PlatformStand = false
             end
         end
-        
-        RunService.Heartbeat:Wait()
     end
 end)
 
--- Painel Visual
-FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (CFRAME TOTAL)")
+print("[INFO] Parte 5 carregada.")
+-- ================= PARTE 6: CRIAÇÃO DO MENU INTERATIVO (RAYFIELD UI) ================= --
+
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+    Name = "🌌 Space Farm Hub | Modo Deus Ativado v4.2",
+    LoadingTitle = "Injetando Motores de Física Fixos...",
+    LoadingSubtitle = "by Marco",
+    ConfigurationSaving = { Enabled = true, FolderName = "SpaceFarmConfig", FileName = "Configoficial" },
+    Discord = { Enabled = false, Invite = "", RememberJoins = true },
+    KeySystem = false
+})
+
+local FarmTab = Window:CreateTab("🛸 Auto Farm", 4483362458)
+local FlyTab = Window:CreateTab("🪂 Voo Livre", 4483362458)
+local PlayersTab = Window:CreateTab("⚔️ PvP & Target", 4483362458)
+
+-- 1. Interface - Auto Farm
+FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM")
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE MEGA BERRY (XP) 🔴", CurrentValue = false, Callback = function(Value) _G.AutoFarmMegaBerry = Value end})
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (DINHEIRO) 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
+FarmTab:CreateToggle({Name = "ATIVAR FARM DE MOEDAS/GOLDEN BERRY 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
 FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
 FarmTab:CreateToggle({Name = "Modo Altura Máxima (Bypass de Paredes)", CurrentValue = false, Callback = function(Value) _G.BypassWalls = Value end})
@@ -382,17 +447,29 @@ FarmTab:CreateSlider({Name = "Velocidade Vertical (CFrame)", Range = {10, 50}, I
 FarmTab:CreateSlider({Name = "Altura do Voo Rasante (Hover)", Range = {2, 20}, Increment = 1, Suffix = "Studs", CurrentValue = 6, Callback = function(Value) _G.AlturaHover = Value end})
 FarmTab:CreateSlider({Name = "Altura de Rota Segura", Range = {80, 180}, Increment = 5, Suffix = "Studs", CurrentValue = 110, Callback = function(Value) _G.AlturaSeguraCeu = Value end})
 
-FlyTab:CreateSection("🛸 CONTROLE DE VOO LIVRE")
-FlyTab:CreateToggle({Name = "Ativar Voo Manual", CurrentValue = false, Callback = function(Value) _G.VooLivreAtivo = Value end})
-FlyTab:CreateSlider({Name = "Velocidade", Range = {15, 50}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(Value) _G.VelocidadeVoo = Value end})
+-- 2. Interface - Voo Livre
+FlyTab:CreateSection("🛸 CONTROLE DE VOO MANUAL")
+FlyTab:CreateToggle({Name = "Ativar Voo Manual 🔓", CurrentValue = false, Callback = function(Value) _G.VooLivreAtivo = Value end})
+FlyTab:CreateSlider({Name = "Velocidade do Voo Manual", Range = {15, 100}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(Value) _G.VelocidadeVoo = Value end})
 
+-- 3. Interface - PvP e Seleção
 PlayersTab:CreateSection("👤 SELEÇÃO DE SESSÃO")
 local PlayerDropdown = PlayersTab:CreateDropdown({Name = "Escolher Player Específico", Options = obterListaPlayers(), CurrentOption = "", MultipleOptions = false, Callback = function(Option) _G.PlayerAlvo = type(Option) == "table" and Option[1] or Option end})
 PlayersTab:CreateButton({Name = "🔄 Atualizar Lista de Players", Callback = function() PlayerDropdown:Refresh(obterListaPlayers()) end})
-PlayersTab:CreateSection("⚙️ CONFIGURAÇÃO DE SEGUIR")
+
+PlayersTab:CreateSection("⚔️ COMBATE & PERSEGUIÇÃO")
+PlayersTab:CreateToggle({Name = "ATIVAR KILL AURA AUTOMÁTICO ⚔️", CurrentValue = false, Callback = function(Value) _G.KillAuraAtivo = Value end})
 PlayersTab:CreateToggle({Name = "ATIVAR SEGUIR PLAYER 👥", CurrentValue = false, Callback = function(Value) _G.PerseguirPlayer = Value end})
-PlayersTab:CreateToggle({Name = "Modo Aleatório", CurrentValue = false, Callback = function(Value) _G.ModoAleatorioPlayers = Value end})
+PlayersTab:CreateToggle({Name = "Modo Perseguir Aleatório", CurrentValue = false, Callback = function(Value) _G.ModoAleatorioPlayers = Value end})
 PlayersTab:CreateSlider({Name = "Distância das Costas", Range = {2, 15}, Increment = 1, Suffix = "Studs", CurrentValue = 4, Callback = function(Value) _G.DistanciaCostas = Value end})
 PlayersTab:CreateSlider({Name = "Velocidade de Perseguição", Range = {15, 70}, Increment = 1, Suffix = "Vel", CurrentValue = 35, Callback = function(Value) _G.VelocidadePerseguicao = Value end})
 
 Rayfield:LoadConfiguration()
+Rayfield:Notify({
+    Title = "Motores Inicializados! 🌌",
+    Content = "Motor estático restaurado com sucesso. Selecione as opções no menu.",
+    Duration = 5,
+    Image = 4483362458,
+})
+
+print("[INFO] Sistema Completo v4.2 Inicializado.")
