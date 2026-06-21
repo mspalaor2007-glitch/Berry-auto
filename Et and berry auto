@@ -67,26 +67,24 @@ local function ativarNoclipLocal(estado)
     end
 end
 
-print("[INFO] Parte 1 de 6 carregada com sucesso.")
-
+print("[INFO] Parte 1 carregada com sucesso.")
 -- ================= PARTE 2: NOVO MOTOR DE VALIDAÇÃO E COLETA REFEITO ================= --
 
 local flyStateEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("FlyStateChanged")
 
 local function gerenciarSinalVooFarm(ativo)
     if _G.VooLivreAtivo then return end
-    
     if ativo then
-        if flyStateEvent then flyStateEvent:FireServer(true) end
+        if flyStateEvent then flyStateEvent:Fire(true) end
     else
         local nenhumFarmAtivo = not _G.AutoFarmMegaBerry and not _G.AutoFarmGoldenBerry and not _G.AutoFarmAlien and not _G.AutoFarmBerry and not _G.PerseguirPlayer
         if nenhumFarmAtivo then
-            if flyStateEvent then flyStateEvent:FireServer(false) end
+            if flyStateEvent then flyStateEvent:Fire(false) end
         end
     end
 end
 
--- Buscador avançado de Berries, Moedas e Coletáveis no Workspace
+-- Novo buscador agressivo focado em achar as Berries de Ouro e Mega mesmo ocultas ou renomeadas
 local function obterItemMaisProximoAvancado(tipoFarm)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -95,15 +93,18 @@ local function obterItemMaisProximoAvancado(tipoFarm)
     local menorDistancia = math.huge
     local itemEscolhido = nil
     
+    -- Varredura total no Workspace para garantir que pegará os itens onde quer que surjam
     for _, objeto in pairs(Workspace:GetDescendants()) do
         local valido = false
         local nomeMinusculo = string.lower(objeto.Name)
         
         if tipoFarm == "Mega" then
+            -- Procura por variações de nome de modelos de Mega Berry ou partes internas gigantes de XP
             if (string.find(nomeMinusculo, "mega") and string.find(nomeMinusculo, "berry")) or string.find(nomeMinusculo, "megaberry") or string.find(nomeMinusculo, "superberry") then
                 valido = true
             end
         elseif tipoFarm == "Golden" then
+            -- Filtro expandido para moedas de ouro, golden berries e colecionáveis raros amarelados
             if string.find(nomeMinusculo, "gold") or string.find(nomeMinusculo, "moeda") or string.find(nomeMinusculo, "coin") or string.find(nomeMinusculo, "ouro") then
                 valido = true
             end
@@ -112,6 +113,7 @@ local function obterItemMaisProximoAvancado(tipoFarm)
                 valido = true
             end
         elseif tipoFarm == "Comum" then
+            -- Mantido intacto conforme seu pedido
             if string.find(nomeMinusculo, "berry") and not string.find(nomeMinusculo, "mega") and not string.find(nomeMinusculo, "golden") and not string.find(nomeMinusculo, "gold") and not string.find(nomeMinusculo, "coin") then
                 valido = true
             end
@@ -139,11 +141,9 @@ local function obterItemMaisProximoAvancado(tipoFarm)
 
     return itemEscolhido
 end
-print("[INFO] Parte 2 de 6 carregada com sucesso.")
 
--- ================= PARTE 3: ENGINE DE DESLOCAMENTO EM CFRAME E LOOP PRINCIPAL DO FARM ================= --
-
-local function moverParaAlvoCFrame(parteAlvo, tipoFarm, deltaTime)
+-- Nova mecânica de aproximação CFrame direta
+local function moverParaAlvoCFrame(parteAlvo, tipoFarm)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
@@ -153,9 +153,10 @@ local function moverParaAlvoCFrame(parteAlvo, tipoFarm, deltaTime)
     rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
+    -- Ajuste de altura dinâmica: Para Mega e Golden, reduzimos o Hover para 0 para colidir direto com o item e coletar na hora
     local alturaDefinida = _G.AlturaHover
     if tipoFarm == "Mega" or tipoFarm == "Golden" then
-        alturaDefinida = 0 
+        alturaDefinida = 0 -- Garante que você passe exatamente por dentro da moeda/mega-berry
     end
 
     local posicaoFinal = parteAlvo.Position + Vector3.new(0, alturaDefinida, 0)
@@ -164,7 +165,7 @@ local function moverParaAlvoCFrame(parteAlvo, tipoFarm, deltaTime)
 
     if _G.BypassWalls and distanciaXy.Magnitude > 15 then
         if rootPart.Position.Y < _G.AlturaSeguraCeu then
-            rootPart.CFrame = rootPart.CFrame + Vector3.new(0, _G.VelocidadeSubidaCFrame * deltaTime, 0)
+            rootPart.CFrame = rootPart.CFrame + Vector3.new(0, _G.VelocidadeSubidaCFrame * 0.02, 0)
             return
         end
         
@@ -172,17 +173,17 @@ local function moverParaAlvoCFrame(parteAlvo, tipoFarm, deltaTime)
         local direcaoCeu = (posicaoCeu - rootPart.Position)
         
         if direcaoCeu.Magnitude > 1 then
-            rootPart.CFrame = CFrame.new(rootPart.Position + (direcaoCeu.Unit * _G.VelocidadeFarm * deltaTime), posicaoCeu)
+            rootPart.CFrame = CFrame.new(rootPart.Position + (direcaoCeu.Unit * _G.VelocidadeFarm * 0.02), posicaoCeu)
             return
         else
-            rootPart.CFrame = CFrame.new(rootPart.Position + (Vector3.new(0, -1, 0) * _G.VelocidadeSubidaCFrame * deltaTime), posicaoFinal)
+            rootPart.CFrame = CFrame.new(rootPart.Position + (Vector3.new(0, -1, 0) * _G.VelocidadeSubidaCFrame * 0.02), posicaoFinal)
             return
         end
     end
 
     if distanciaTotal > 0.5 then
         local direcao = (posicaoFinal - rootPart.Position).Unit
-        local passo = direcao * _G.VelocidadeFarm * deltaTime
+        local passo = direcao * _G.VelocidadeFarm * 0.02
         
         if passo.Magnitude > distanciaTotal then
             rootPart.CFrame = CFrame.new(posicaoFinal)
@@ -194,7 +195,8 @@ local function moverParaAlvoCFrame(parteAlvo, tipoFarm, deltaTime)
     end
 end
 
-RunService.Heartbeat:Connect(function(deltaTime)
+-- Loop Principal do Auto Farm com as novas regras
+RunService.Heartbeat:Connect(function()
     local farmAtivo = _G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry
     gerenciarSinalVooFarm(farmAtivo)
 
@@ -219,18 +221,18 @@ RunService.Heartbeat:Connect(function(deltaTime)
     end
 
     if alvoAtual then 
-        moverParaAlvoCFrame(alvoAtual, tipoAtual, deltaTime) 
+        moverParaAlvoCFrame(alvoAtual, tipoAtual) 
     end
 end)
 
-print("[INFO] Parte 3 de 6 carregada com sucesso.")
-
--- ================= PARTE 4: MOTOR DE VOO UNIVERSAL (IGNORA TRAVA DE MORFO) ================= --
+print("[INFO] Parte 2 Atualizada. Motor de busca para Mega/Golden reconstruído.")
+-- ================= PARTE 3: MOTOR DE VOO UNIVERSAL (IGNORA TRAVA DE MORFO) ================= --
 
 local bodyVelocity = nil
 local bodyGyro = nil
+local flyStateEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("FlyStateChanged")
 
-RunService.Heartbeat:Connect(function()
+RunService.RenderStepped:Connect(function()
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
@@ -245,7 +247,7 @@ RunService.Heartbeat:Connect(function()
         humanoid.AutoRotate = false
         humanoid.PlatformStand = true
         
-        if flyStateEvent then flyStateEvent:FireServer(true) end
+        if flyStateEvent then flyStateEvent:Fire(true) end
 
         if not bodyVelocity or bodyVelocity.Parent ~= rootPart then
             bodyVelocity = Instance.new("BodyVelocity")
@@ -287,7 +289,7 @@ RunService.Heartbeat:Connect(function()
         local precisaDeVooAinda = _G.PerseguirPlayer or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry or _G.AutoFarmMegaBerry
         
         if not precisaDeVooAinda then
-            if flyStateEvent then flyStateEvent:FireServer(false) end
+            if flyStateEvent then flyStateEvent:Fire(false) end
             if humanoid and humanoid.PlatformStand then
                 humanoid.PlatformStand = false
                 ativarNoclipLocal(false)
@@ -301,13 +303,10 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
-print("[INFO] Parte 4 de 6 carregada com sucesso.")
-
--- ================= PARTE 5: MOTOR DE PERSEGUIÇÃO E ATIVAÇÃO DO KILL AURA SIMULTÂNEO ================= --
+print("[INFO] Parte 3 carregada. Voo Manual para qualquer bicho ativo.")
+-- ================= PARTE 4: MOTOR DE PERSEGUIÇÃO E ATIVAÇÃO DO KILL AURA SIMULTÂNEO ================= --
 
 local attackEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("AttackRequest")
-local ultimoAtaque = 0
-local delayAtaque = 0.1 -- Debounce interno para reduzir flutuações e latência de rede
 
 local function obterListaPlayers()
     local lista = {}
@@ -319,8 +318,6 @@ end
 
 task.spawn(function()
     while true do
-        local deltaTime = RunService.Heartbeat:Wait()
-        
         if _G.PerseguirPlayer then
             local tPlayer = nil
 
@@ -380,15 +377,14 @@ task.spawn(function()
 
                     if distanciaAtual > 0.5 then
                         local direcaoUnit = direcaoIr.Unit
-                        local passo = direcaoUnit * _G.VelocidadePerseguicao * deltaTime
+                        local passo = direcaoUnit * _G.VelocidadePerseguicao * 0.02
                         local novaPosicao = rootPart.Position + passo
                         if passo.Magnitude > distanciaAtual then novaPosicao = posicaoCostas end
                         rootPart.CFrame = CFrame.lookAt(novaPosicao, Vector3.new(tRoot.Position.X, novaPosicao.Y, tRoot.Position.Z))
                     else
                         rootPart.CFrame = CFrame.new(posicaoCostas, tRoot.Position)
                         
-                        if _G.KillAuraAtivo and attackEvent and (tick() - ultimoAtaque >= delayAtaque) then
-                            ultimoAtaque = tick()
+                        if _G.KillAuraAtivo and attackEvent then
                             attackEvent:FireServer()
                         end
                     end
@@ -405,12 +401,12 @@ task.spawn(function()
                 humanoid.PlatformStand = false
             end
         end
+        RunService.Heartbeat:Wait()
     end
 end)
 
-print("[INFO] Parte 5 de 6 carregada com sucesso.")
-
--- ================= PARTE 6: CRIAÇÃO DO MENU INTERATIVO (RAYFIELD UI) ================= --
+print("[INFO] Parte 4 carregada com sucesso.")
+-- ================= PARTE 5: CRIAÇÃO DO MENU INTERATIVO (RAYFIELD UI) ================= --
 
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
@@ -464,4 +460,4 @@ Rayfield:Notify({
     Image = 4483362458,
 })
 
-print("[INFO] Painel v4.1 carregado por completo!")
+print("[INFO] Painel v4.1 carregado com sucesso!")
