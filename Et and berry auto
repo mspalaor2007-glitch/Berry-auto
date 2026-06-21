@@ -1,91 +1,25 @@
--- ================= PARTE 1: INICIALIZAÇÃO, CONFIGURAÇÕES E PARÂMETROS DE ANCORAGEM ================= --
-
--- 1. Definição de Serviços Principais do Roblox
+-- ================= PARTE 1: INICIALIZAÇÃO E BUSCADOR POR ATRIBUTOS ================= --
 local Players = game:GetService("Players")
 local Workspace = game:GetService("Workspace")
 local RunService = game:GetService("RunService")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local TweenService = game:GetService("TweenService")
 
 local player = Players.LocalPlayer
 
--- 2. Inicialização Segura das Variáveis Globais (_G)
+-- Inicialização das Variáveis Globais de Controle (_G)
 _G.AutoFarmMegaBerry = _G.AutoFarmMegaBerry or false
 _G.AutoFarmGoldenBerry = _G.AutoFarmGoldenBerry or false
 _G.AutoFarmAlien = _G.AutoFarmAlien or false
 _G.AutoFarmBerry = _G.AutoFarmBerry or false
-_G.BypassWalls = _G.BypassWalls or false
 
-_G.VelocidadeFarm = _G.VelocidadeFarm or 26
-_G.VelocidadeSubidaCFrame = _G.VelocidadeSubidaCFrame or 24
-_G.AlturaHover = _G.AlturaHover or 6
-_G.AlturaSeguraCeu = _G.AlturaSeguraCeu or 110
-
--- Configurações de Voo Livre Adaptativo (Qualquer Bicho)
-_G.VooLivreAtivo = _G.VooLivreAtivo or false
-_G.VelocidadeVoo = _G.VelocidadeVoo or 33
-
--- Configurações de Combate, Perseguição e Kill Aura
+_G.KillAuraAtivo = _G.KillAuraAtivo or false
 _G.PerseguirPlayer = _G.PerseguirPlayer or false
-_G.ModoAleatorioPlayers = _G.ModoAleatorioPlayers or false
+_G.TargetAleatorio = _G.TargetAleatorio or false -- Novo modo aleatório
 _G.PlayerAlvo = _G.PlayerAlvo or ""
 _G.DistanciaCostas = _G.DistanciaCostas or 4
 _G.VelocidadePerseguicao = _G.VelocidadePerseguicao or 35
-_G.KillAuraAtivo = _G.KillAuraAtivo or false
 
--- 3. Função Base para Controle de Colisão Local (Noclip)
-local conexaoNoclip = nil
-local function ativarNoclipLocal(estado)
-    if estado then
-        if not conexaoNoclip then
-            conexaoNoclip = RunService.Stepped:Connect(function()
-                local character = player.Character
-                if character then
-                    for _, parte in pairs(character:GetDescendants()) do
-                        if parte:IsA("BasePart") and parte.CanCollide then
-                            parte.CanCollide = false
-                        end
-                    end
-                end
-            end)
-        end
-    else
-        if conexaoNoclip then
-            conexaoNoclip:Disconnect()
-            conexaoNoclip = nil
-            
-            local character = player.Character
-            if character then
-                local root = character:FindFirstChild("HumanoidRootPart")
-                local upper = character:FindFirstChild("UpperTorso")
-                local lower = character:FindFirstChild("LowerTorso")
-                if root then root.CanCollide = true end
-                if upper then upper.CanCollide = true end
-                if lower then lower.CanCollide = true end
-            end
-        end
-    end
-end
-
-print("[INFO] Parte 1 carregada com sucesso.")
--- ================= PARTE 2: NOVO MOTOR DE VALIDAÇÃO E COLETA REFEITO ================= --
-
-local flyStateEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("FlyStateChanged")
-
-local function gerenciarSinalVooFarm(ativo)
-    if _G.VooLivreAtivo then return end
-    if ativo then
-        if flyStateEvent then flyStateEvent:Fire(true) end
-    else
-        local nenhumFarmAtivo = not _G.AutoFarmMegaBerry and not _G.AutoFarmGoldenBerry and not _G.AutoFarmAlien and not _G.AutoFarmBerry and not _G.PerseguirPlayer
-        if nenhumFarmAtivo then
-            if flyStateEvent then flyStateEvent:Fire(false) end
-        end
-    end
-end
-
--- Novo buscador agressivo focado em achar as Berries de Ouro e Mega mesmo ocultas ou renomeadas
-local function obterItemMaisProximoAvancado(tipoFarm)
+local function obterBerryPorAtributo(tipoFarm)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     if not rootPart then return nil end
@@ -93,264 +27,115 @@ local function obterItemMaisProximoAvancado(tipoFarm)
     local menorDistancia = math.huge
     local itemEscolhido = nil
     
-    -- Varredura total no Workspace para garantir que pegará os itens onde quer que surjam
     for _, objeto in pairs(Workspace:GetDescendants()) do
-        local valido = false
-        local nomeMinusculo = string.lower(objeto.Name)
-        
-        if tipoFarm == "Mega" then
-            -- Procura por variações de nome de modelos de Mega Berry ou partes internas gigantes de XP
-            if (string.find(nomeMinusculo, "mega") and string.find(nomeMinusculo, "berry")) or string.find(nomeMinusculo, "megaberry") or string.find(nomeMinusculo, "superberry") then
+        if objeto.Name == "Berry" and objeto:IsA("BasePart") then
+            local valorAtributo = objeto:GetAttribute("BerryType")
+            local valido = false
+            
+            if tipoFarm == "Mega" and valorAtributo and (string.find(string.lower(valorAtributo), "mega") or string.find(string.lower(valorAtributo), "super")) then
                 valido = true
-            end
-        elseif tipoFarm == "Golden" then
-            -- Filtro expandido para moedas de ouro, golden berries e colecionáveis raros amarelados
-            if string.find(nomeMinusculo, "gold") or string.find(nomeMinusculo, "moeda") or string.find(nomeMinusculo, "coin") or string.find(nomeMinusculo, "ouro") then
+            elseif tipoFarm == "Golden" and valorAtributo and (string.lower(valorAtributo) == "gold" or string.lower(valorAtributo) == "golden") then
                 valido = true
-            end
-        elseif tipoFarm == "Alien" then
-            if string.find(nomeMinusculo, "alien") then
+            elseif tipoFarm == "Alien" and valorAtributo and string.lower(valorAtributo) == "alien" then
                 valido = true
-            end
-        elseif tipoFarm == "Comum" then
-            -- Mantido intacto conforme seu pedido
-            if string.find(nomeMinusculo, "berry") and not string.find(nomeMinusculo, "mega") and not string.find(nomeMinusculo, "golden") and not string.find(nomeMinusculo, "gold") and not string.find(nomeMinusculo, "coin") then
+            elseif tipoFarm == "Comum" and valorAtributo and string.lower(valorAtributo) == "normal" then
                 valido = true
-            end
-        end
-
-        if valido then
-            local parteAlvo = nil
-            if objeto:IsA("BasePart") then
-                parteAlvo = objeto
-            elseif objeto:IsA("Model") and objeto.PrimaryPart then
-                parteAlvo = objeto.PrimaryPart
-            else
-                parteAlvo = objeto:FindFirstChildWhichIsA("BasePart")
             end
 
-            if parteAlvo and parteAlvo.Position then
-                local distancia = (rootPart.Position - parteAlvo.Position).Magnitude
+            if valido and objeto.Position then
+                local distancia = (rootPart.Position - objeto.Position).Magnitude
                 if distancia < menorDistancia then
                     menorDistancia = distancia
-                    itemEscolhido = parteAlvo
+                    itemEscolhido = objeto
                 end
             end
         end
     end
-
     return itemEscolhido
 end
 
--- Nova mecânica de aproximação CFrame direta
-local function moverParaAlvoCFrame(parteAlvo, tipoFarm)
+print("[INFO] Parte 1 Carregada.")
+-- ================= PARTE 2: LOOP DE TELEPORTE E MOTOR PVP ALEATÓRIO ================= --
+local flyStateEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("FlyStateChanged")
+
+-- Loop das Berries (Mantido fix de movimento)
+RunService.Heartbeat:Connect(function()
+    local farmAtivo = _G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
     local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-    if not rootPart or not humanoid or not parteAlvo then return end
+    
+    if not farmAtivo then
+        if humanoid and humanoid.PlatformStand and not _G.PerseguirPlayer then
+            humanoid.PlatformStand = false
+        end
+        return 
+    end
+
+    if not rootPart or not humanoid then return end
 
     humanoid.PlatformStand = true
     rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
 
-    -- Ajuste de altura dinâmica: Para Mega e Golden, reduzimos o Hover para 0 para colidir direto com o item e coletar na hora
-    local alturaDefinida = _G.AlturaHover
-    if tipoFarm == "Mega" or tipoFarm == "Golden" then
-        alturaDefinida = 0 -- Garante que você passe exatamente por dentro da moeda/mega-berry
-    end
-
-    local posicaoFinal = parteAlvo.Position + Vector3.new(0, alturaDefinida, 0)
-    local distanciaXy = Vector3.new(posicaoFinal.X, 0, posicaoFinal.Z) - Vector3.new(rootPart.Position.X, 0, rootPart.Position.Z)
-    local distanciaTotal = (posicaoFinal - rootPart.Position).Magnitude
-
-    if _G.BypassWalls and distanciaXy.Magnitude > 15 then
-        if rootPart.Position.Y < _G.AlturaSeguraCeu then
-            rootPart.CFrame = rootPart.CFrame + Vector3.new(0, _G.VelocidadeSubidaCFrame * 0.02, 0)
-            return
-        end
-        
-        local posicaoCeu = Vector3.new(posicaoFinal.X, _G.AlturaSeguraCeu, posicaoFinal.Z)
-        local direcaoCeu = (posicaoCeu - rootPart.Position)
-        
-        if direcaoCeu.Magnitude > 1 then
-            rootPart.CFrame = CFrame.new(rootPart.Position + (direcaoCeu.Unit * _G.VelocidadeFarm * 0.02), posicaoCeu)
-            return
-        else
-            rootPart.CFrame = CFrame.new(rootPart.Position + (Vector3.new(0, -1, 0) * _G.VelocidadeSubidaCFrame * 0.02), posicaoFinal)
-            return
-        end
-    end
-
-    if distanciaTotal > 0.5 then
-        local direcao = (posicaoFinal - rootPart.Position).Unit
-        local passo = direcao * _G.VelocidadeFarm * 0.02
-        
-        if passo.Magnitude > distanciaTotal then
-            rootPart.CFrame = CFrame.new(posicaoFinal)
-        else
-            rootPart.CFrame = CFrame.new(rootPart.Position + passo)
-        end
-    else
-        rootPart.CFrame = CFrame.new(posicaoFinal)
-    end
-end
-
--- Loop Principal do Auto Farm com as novas regras
-RunService.Heartbeat:Connect(function()
-    local farmAtivo = _G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry
-    gerenciarSinalVooFarm(farmAtivo)
-
-    if not farmAtivo then return end
-
-    ativarNoclipLocal(true)
     local alvoAtual = nil
-    local tipoAtual = ""
+    if _G.AutoFarmMegaBerry then alvoAtual = obterBerryPorAtributo("Mega")
+    elseif _G.AutoFarmGoldenBerry then alvoAtual = obterBerryPorAtributo("Golden")
+    elseif _G.AutoFarmAlien then alvoAtual = obterBerryPorAtributo("Alien")
+    elseif _G.AutoFarmBerry then alvoAtual = obterBerryPorAtributo("Comum") end
 
-    if _G.AutoFarmMegaBerry then 
-        tipoAtual = "Mega"
-        alvoAtual = obterItemMaisProximoAvancado("Mega")
-    elseif _G.AutoFarmGoldenBerry then 
-        tipoAtual = "Golden"
-        alvoAtual = obterItemMaisProximoAvancado("Golden")
-    elseif _G.AutoFarmAlien then 
-        tipoAtual = "Alien"
-        alvoAtual = obterItemMaisProximoAvancado("Alien")
-    elseif _G.AutoFarmBerry then 
-        tipoAtual = "Comum"
-        alvoAtual = obterItemMaisProximoAvancado("Comum") 
-    end
-
-    if alvoAtual then 
-        moverParaAlvoCFrame(alvoAtual, tipoAtual) 
+    if alvoAtual and alvoAtual.Position then
+        rootPart.CFrame = CFrame.new(alvoAtual.Position)
     end
 end)
 
-print("[INFO] Parte 2 Atualizada. Motor de busca para Mega/Golden reconstruído.")
--- ================= PARTE 3: MOTOR DE VOO UNIVERSAL (IGNORA TRAVA DE MORFO) ================= --
+-- Sistema de Perseguição PvP com Seleção Aleatória Dinâmica
+local attackEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("AttackRequest")
 
-local bodyVelocity = nil
-local bodyGyro = nil
-local flyStateEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("FlyStateChanged")
-
-RunService.RenderStepped:Connect(function()
-    local character = player.Character
-    local rootPart = character and character:FindFirstChild("HumanoidRootPart")
-    local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-    local camera = Workspace.CurrentCamera
-
-    if _G.VooLivreAtivo and rootPart and humanoid and camera then
-        ativarNoclipLocal(true)
-        
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
-        humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
-        humanoid.AutoRotate = false
-        humanoid.PlatformStand = true
-        
-        if flyStateEvent then flyStateEvent:Fire(true) end
-
-        if not bodyVelocity or bodyVelocity.Parent ~= rootPart then
-            bodyVelocity = Instance.new("BodyVelocity")
-            bodyVelocity.Name = "MorphFlyVelocity"
-            bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
-            bodyVelocity.P = 1250
-            bodyVelocity.Parent = rootPart
-        end
-        
-        if not bodyGyro or bodyGyro.Parent ~= rootPart then
-            bodyGyro = Instance.new("BodyGyro")
-            bodyGyro.Name = "MorphFlyGyro"
-            bodyGyro.MaxTorque = Vector3.new(math.huge, math.huge, math.huge)
-            bodyGyro.D = 500
-            bodyGyro.P = 3000
-            bodyGyro.Parent = rootPart
-        end
-
-        rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-        rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
-        local direcao = humanoid.MoveDirection
-        if direcao.Magnitude > 0 then
-            local vetorCamera = camera.CFrame.LookVector
-            local direcaoVoo = Vector3.new(direcao.X, vetorCamera.Y, direcao.Z)
-            bodyVelocity.Velocity = direcaoVoo.Unit * _G.VelocidadeVoo
-        else
-            bodyVelocity.Velocity = Vector3.new(0, 0, 0)
-        end
-        
-        local lookVectHorizontal = camera.CFrame.LookVector * Vector3.new(1, 0, 1)
-        if lookVectHorizontal.Magnitude > 0.01 then
-            bodyGyro.CFrame = CFrame.lookAt(rootPart.Position, rootPart.Position + lookVectHorizontal)
-        end
-    else
-        if bodyVelocity then bodyVelocity:Destroy() bodyVelocity = nil end
-        if bodyGyro then bodyGyro:Destroy() bodyGyro = nil end
-        
-        local precisaDeVooAinda = _G.PerseguirPlayer or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry or _G.AutoFarmMegaBerry
-        
-        if not precisaDeVooAinda then
-            if flyStateEvent then flyStateEvent:Fire(false) end
-            if humanoid and humanoid.PlatformStand then
-                humanoid.PlatformStand = false
-                ativarNoclipLocal(false)
-                
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, true)
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, true)
-                humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, true)
-                humanoid.AutoRotate = true
+local function selecionarPlayerAleatorio()
+    local todosPlayers = Players:GetPlayers()
+    local candidatos = {}
+    
+    for _, p in pairs(todosPlayers) do
+        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") then
+            local hum = p.Character:FindFirstChildWhichIsA("Humanoid")
+            if hum and hum.Health > 0 then
+                table.insert(candidatos, p)
             end
         end
     end
-end)
-
-print("[INFO] Parte 3 carregada. Voo Manual para qualquer bicho ativo.")
--- ================= PARTE 4: MOTOR DE PERSEGUIÇÃO E ATIVAÇÃO DO KILL AURA SIMULTÂNEO ================= --
-
-local attackEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("AttackRequest")
-
-local function obterListaPlayers()
-    local lista = {}
-    for _, p in pairs(Players:GetPlayers()) do
-        if p ~= player then table.insert(lista, p.Name) end
+    
+    if #candidatos > 0 then
+        local sorteado = candidatos[math.random(1, #candidatos)]
+        return sorteado.Name
     end
-    return lista
+    return ""
 end
 
 task.spawn(function()
     while true do
         if _G.PerseguirPlayer then
-            local tPlayer = nil
-
-            if _G.ModoAleatorioPlayers then
-                local alvoAtualValido = Players:FindFirstChild(_G.PlayerAlvo)
-                local estaVivo = false
+            -- Se o modo aleatório estiver ligado e não houver alvo válido, escolhe um novo
+            if _G.TargetAleatorio then
+                local playerAtual = Players:FindFirstChild(_G.PlayerAlvo)
+                local precisaTrocar = false
                 
-                if alvoAtualValido and alvoAtualValido.Character and alvoAtualValido.Character:FindFirstChild("HumanoidRootPart") then
-                    local hum = alvoAtualValido.Character:FindFirstChildWhichIsA("Humanoid")
-                    if hum and hum.Health > 0 then estaVivo = true end
-                end
-
-                if not estaVivo then
-                    local todosPlayersVivos = {}
-                    for _, p in pairs(Players:GetPlayers()) do
-                        if p ~= player and p.Character and p.Character:FindFirstChild("HumanoidRootPart") and p.Character:FindFirstChildWhichIsA("Humanoid") and p.Character:FindFirstChildWhichIsA("Humanoid").Health > 0 then
-                            table.insert(todosPlayersVivos, p)
-                        end
-                    end
-                    if #todosPlayersVivos > 0 then
-                        local escolhido = todosPlayersVivos[math.random(1, #todosPlayersVivos)]
-                        _G.PlayerAlvo = escolhido.Name
-                        tPlayer = escolhido
-                    else
-                        tPlayer = nil
-                    end
+                if not playerAtual or not playerAtual.Character or not playerAtual.Character:FindFirstChild("HumanoidRootPart") then
+                    precisaTrocar = true
                 else
-                    tPlayer = alvoAtualValido
+                    local hum = playerAtual.Character:FindFirstChildWhichIsA("Humanoid")
+                    if not hum or hum.Health <= 0 then
+                        precisaTrocar = true
+                    end
                 end
-            else
-                tPlayer = Players:FindFirstChild(_G.PlayerAlvo)
+                
+                if precisaTrocar or _G.PlayerAlvo == "" then
+                    _G.PlayerAlvo = selecionarPlayerAleatorio()
+                    task.wait(0.5) -- Pequena pausa para estabilizar a troca de alvo
+                end
             end
 
+            local tPlayer = Players:FindFirstChild(_G.PlayerAlvo)
             local character = player.Character
             local rootPart = character and character:FindFirstChild("HumanoidRootPart")
             local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
@@ -360,44 +145,21 @@ task.spawn(function()
                 local tHumanoid = tPlayer.Character:FindFirstChildWhichIsA("Humanoid")
 
                 if tRoot and tHumanoid and tHumanoid.Health > 0 then
-                    ativarNoclipLocal(true)
                     humanoid.PlatformStand = true
-                    
-                    humanoid:SetStateEnabled(Enum.HumanoidStateType.FallingDown, false)
-                    humanoid:SetStateEnabled(Enum.HumanoidStateType.GettingUp, false)
-                    humanoid:SetStateEnabled(Enum.HumanoidStateType.Freefall, false)
-                    humanoid.AutoRotate = false
-
                     rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
-                    rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
-
+                    
                     local posicaoCostas = (tRoot.CFrame * CFrame.new(0, 0, _G.DistanciaCostas)).Position
-                    local direcaoIr = (posicaoCostas - rootPart.Position)
-                    local distanciaAtual = direcaoIr.Magnitude
-
-                    if distanciaAtual > 0.5 then
-                        local direcaoUnit = direcaoIr.Unit
-                        local passo = direcaoUnit * _G.VelocidadePerseguicao * 0.02
-                        local novaPosicao = rootPart.Position + passo
-                        if passo.Magnitude > distanciaAtual then novaPosicao = posicaoCostas end
-                        rootPart.CFrame = CFrame.lookAt(novaPosicao, Vector3.new(tRoot.Position.X, novaPosicao.Y, tRoot.Position.Z))
-                    else
-                        rootPart.CFrame = CFrame.new(posicaoCostas, tRoot.Position)
-                        
-                        if _G.KillAuraAtivo and attackEvent then
-                            attackEvent:FireServer()
-                        end
+                    rootPart.CFrame = CFrame.new(posicaoCostas, tRoot.Position)
+                    
+                    if _G.KillAuraAtivo and attackEvent then
+                        attackEvent:FireServer()
                     end
-                else
-                    if _G.ModoAleatorioPlayers then _G.PlayerAlvo = "" end
                 end
-            else
-                if _G.ModoAleatorioPlayers then _G.PlayerAlvo = "" end
             end
         else
             local character = player.Character
             local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
-            if humanoid and humanoid.PlatformStand and not _G.VooLivreAtivo and not _G.AutoFarmBerry and not _G.AutoFarmAlien and not _G.AutoFarmGoldenBerry and not _G.AutoFarmMegaBerry then
+            if humanoid and not (_G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry) then
                 humanoid.PlatformStand = false
             end
         end
@@ -405,59 +167,70 @@ task.spawn(function()
     end
 end)
 
-print("[INFO] Parte 4 carregada com sucesso.")
--- ================= PARTE 5: CRIAÇÃO DO MENU INTERATIVO (RAYFIELD UI) ================= --
-
+print("[INFO] Parte 2 (PvP Otimizado com Modo Aleatório) carregada.")
+-- ================= PARTE 3: INTERFACE DE USUÁRIO RAYFIELD v5.4 ================= --
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "🌌 Space Farm Hub | Modo Deus Ativado v4.1",
-    LoadingTitle = "Injetando Motores Corrigidos...",
+    Name = "🌌 Space Farm Hub | Target Mod v5.4",
+    LoadingTitle = "Injetando Funções Avançadas de Caça...",
     LoadingSubtitle = "by Marco",
     ConfigurationSaving = { Enabled = true, FolderName = "SpaceFarmConfig", FileName = "Configoficial" },
-    Discord = { Enabled = false, Invite = "", RememberJoins = true },
     KeySystem = false
 })
 
-local FarmTab = Window:CreateTab("🛸 Auto Farm", 4483362458)
-local FlyTab = Window:CreateTab("🪂 Voo Livre", 4483362458)
-local PlayersTab = Window:CreateTab("⚔️ PvP & Target", 4483362458)
+local FarmTab = Window:CreateTab("🛸 Teleport Farm")
+local PlayersTab = Window:CreateTab("⚔️ PvP & Target")
 
--- 1. Interface - Auto Farm
-FarmTab:CreateSection("🛸 CONFIGURAÇÃO DO FLY-FARM (ATUALIZADO)")
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE MEGA BERRY (XP) 🔴", CurrentValue = false, Callback = function(Value) _G.AutoFarmMegaBerry = Value end})
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE MOEDAS/GOLDEN BERRY 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE ALIEN 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
-FarmTab:CreateToggle({Name = "ATIVAR FARM DE BERRY (COMUM) 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
-FarmTab:CreateToggle({Name = "Modo Altura Máxima (Bypass de Paredes)", CurrentValue = false, Callback = function(Value) _G.BypassWalls = Value end})
-FarmTab:CreateSlider({Name = "Velocidade Horizontal (CFrame)", Range = {10, 60}, Increment = 1, Suffix = "Vel", CurrentValue = 26, Callback = function(Value) _G.VelocidadeFarm = Value end})
-FarmTab:CreateSlider({Name = "Velocidade Vertical (CFrame)", Range = {10, 50}, Increment = 1, Suffix = "Vel Y", CurrentValue = 24, Callback = function(Value) _G.VelocidadeSubidaCFrame = Value end})
-FarmTab:CreateSlider({Name = "Altura do Voo Rasante (Hover)", Range = {2, 20}, Increment = 1, Suffix = "Studs", CurrentValue = 6, Callback = function(Value) _G.AlturaHover = Value end})
-FarmTab:CreateSlider({Name = "Altura de Rota Segura", Range = {80, 180}, Increment = 5, Suffix = "Studs", CurrentValue = 110, Callback = function(Value) _G.AlturaSeguraCeu = Value end})
+local function obterListaPlayers()
+    local lista = {}
+    for _, p in pairs(Players:GetPlayers()) do
+        if p ~= player then table.insert(lista, p.Name) end
+    end
+    return lista
+end
 
--- 2. Interface - Voo Livre Desbloqueado
-FlyTab:CreateSection("🛸 CONTROLE DE VOO MANUAL (QUALQUER BICHO)")
-FlyTab:CreateToggle({Name = "Ativar Voo Manual 🔓", CurrentValue = false, Callback = function(Value) _G.VooLivreAtivo = Value end})
-FlyTab:CreateSlider({Name = "Velocidade do Voo Manual", Range = {15, 100}, Increment = 1, Suffix = "Vel", CurrentValue = 33, Callback = function(Value) _G.VelocidadeVoo = Value end})
+FarmTab:CreateSection("⚡ COMPORTAMENTO DE TELEPORTE DIRETO")
+FarmTab:CreateToggle({Name = "TELEPORTE: MEGA BERRY 🔴", CurrentValue = false, Callback = function(Value) _G.AutoFarmMegaBerry = Value end})
+FarmTab:CreateToggle({Name = "TELEPORTE: GOLDEN BERRY / AMARELAS 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
+FarmTab:CreateToggle({Name = "TELEPORTE: ALIEN WORLD 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
+FarmTab:CreateToggle({Name = "TELEPORTE: BERRY NORMAL 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
 
--- 3. Interface - PvP e Perseguição
-PlayersTab:CreateSection("👤 SELEÇÃO DE SESSÃO")
-local PlayerDropdown = PlayersTab:CreateDropdown({Name = "Escolher Player Específico", Options = obterListaPlayers(), CurrentOption = "", MultipleOptions = false, Callback = function(Option) _G.PlayerAlvo = type(Option) == "table" and Option[1] or Option end})
+-- Menu de Alvos PvP Reestruturado
+PlayersTab:CreateSection("👤 MODO DE SELEÇÃO DE TARGET")
+PlayersTab:CreateToggle({
+    Name = "🎯 CAÇAR PLAYER ALEATÓRIO (Auto-Switch)",
+    CurrentValue = false,
+    Callback = function(Value) 
+        _G.TargetAleatorio = Value 
+        if Value then
+            _G.PlayerAlvo = "" -- Reseta o alvo manual para o motor escolher um aleatório
+        end
+    end
+})
+
+local PlayerDropdown = PlayersTab:CreateDropdown({
+    Name = "Escolher Alvo Manual (Desative o Modo Aleatório)", 
+    Options = obterListaPlayers(), 
+    CurrentOption = "", 
+    MultipleOptions = false, 
+    Callback = function(Option) 
+        if not _G.TargetAleatorio then
+            _G.PlayerAlvo = type(Option) == "table" and Option[1] or Option 
+        end
+    end
+})
+
 PlayersTab:CreateButton({Name = "🔄 Atualizar Lista de Players", Callback = function() PlayerDropdown:Refresh(obterListaPlayers()) end})
 
-PlayersTab:CreateSection("⚔️ COMBATE & PERSEGUIÇÃO")
+PlayersTab:CreateSection("⚔️ COMBATE EM MARCHA")
+PlayersTab:CreateToggle({Name = "ATIVAR SEGUIR PLAYER (TELEPORTE) 👥", CurrentValue = false, Callback = function(Value) _G.PerseguirPlayer = Value end})
 PlayersTab:CreateToggle({Name = "ATIVAR KILL AURA AUTOMÁTICO ⚔️", CurrentValue = false, Callback = function(Value) _G.KillAuraAtivo = Value end})
-PlayersTab:CreateToggle({Name = "ATIVAR SEGUIR PLAYER 👥", CurrentValue = false, Callback = function(Value) _G.PerseguirPlayer = Value end})
-PlayersTab:CreateToggle({Name = "Modo Perseguir Aleatório", CurrentValue = false, Callback = function(Value) _G.ModoAleatorioPlayers = Value end})
-PlayersTab:CreateSlider({Name = "Distância das Costas", Range = {2, 15}, Increment = 1, Suffix = "Studs", CurrentValue = 4, Callback = function(Value) _G.DistanciaCostas = Value end})
-PlayersTab:CreateSlider({Name = "Velocidade de Perseguição", Range = {15, 70}, Increment = 1, Suffix = "Vel", CurrentValue = 35, Callback = function(Value) _G.VelocidadePerseguicao = Value end})
 
 Rayfield:LoadConfiguration()
 Rayfield:Notify({
-    Title = "Farms Corrigidos! 🌌",
-    Content = "O motor de detecção para as moedas e Mega Berries foi consertado e está pronto.",
-    Duration = 6,
-    Image = 4483362458,
+    Title = "Modo Caça Adicionado! 🎯",
+    Content = "Ative 'Caçar Player Aleatório' e ligue o 'Seguir Player' para iniciar a rotação automática.",
+    Duration = 5
 })
-
-print("[INFO] Painel v4.1 carregado com sucesso!")
+print("[INFO] Script v5.4 Completo Carregado!")
