@@ -13,12 +13,16 @@ _G.AutoFarmAlien = _G.AutoFarmAlien or false
 _G.AutoFarmBerry = _G.AutoFarmBerry or false
 
 _G.KillAuraAtivo = _G.KillAuraAtivo or false
+_G.AutoAttackGeral = _G.AutoAttackGeral or false -- Macro de ataque geral
+_G.FlyMorphAtivo = _G.FlyMorphAtivo or false     -- Atributo de Voo (IsFlyingMorph)
+
 _G.PerseguirPlayer = _G.PerseguirPlayer or false
-_G.TargetAleatorio = _G.TargetAleatorio or false -- Novo modo aleatório
+_G.TargetAleatorio = _G.TargetAleatorio or false 
 _G.PlayerAlvo = _G.PlayerAlvo or ""
 _G.DistanciaCostas = _G.DistanciaCostas or 4
 _G.VelocidadePerseguicao = _G.VelocidadePerseguicao or 35
 
+-- Função de escaneamento de Berries por Atributo no Workspace
 local function obterBerryPorAtributo(tipoFarm)
     local character = player.Character
     local rootPart = character and character:FindFirstChild("HumanoidRootPart")
@@ -54,11 +58,23 @@ local function obterBerryPorAtributo(tipoFarm)
     return itemEscolhido
 end
 
-print("[INFO] Parte 1 Carregada.")
--- ================= PARTE 2: LOOP DE TELEPORTE E MOTOR PVP ALEATÓRIO ================= --
+print("[INFO] Parte 1 Carregada com sucesso.")
+-- ================= PARTE 2: LOOPS, MOTOR DE VOO E AUTO ATTACK ================= --
 local flyStateEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("FlyStateChanged")
+local attackEvent = ReplicatedStorage:WaitForChild("Events"):FindFirstChild("AttackRequest")
 
--- Loop das Berries (Mantido fix de movimento)
+-- Loop de Atualização do Voo (Força o atributo IsFlyingMorph no Personagem)
+RunService.Heartbeat:Connect(function()
+    local character = player.Character
+    if character then
+        -- Compara o estado atual do atributo com o Toggle da UI para evitar spam desnecessário
+        if character:GetAttribute("IsFlyingMorph") ~= _G.FlyMorphAtivo then
+            character:SetAttribute("IsFlyingMorph", _G.FlyMorphAtivo)
+        end
+    end
+end)
+
+-- Loop Automático das Berries (Mantém o fix de física e movimento travado)
 RunService.Heartbeat:Connect(function()
     local farmAtivo = _G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry
     local character = player.Character
@@ -66,6 +82,7 @@ RunService.Heartbeat:Connect(function()
     local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
     
     if not farmAtivo then
+        -- Se o farm desligar e não estiver caçando player, devolve o controle do boneco
         if humanoid and humanoid.PlatformStand and not _G.PerseguirPlayer then
             humanoid.PlatformStand = false
         end
@@ -74,6 +91,7 @@ RunService.Heartbeat:Connect(function()
 
     if not rootPart or not humanoid then return end
 
+    -- Trava a física do personagem para não bugar no teletransporte
     humanoid.PlatformStand = true
     rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
     rootPart.AssemblyAngularVelocity = Vector3.new(0, 0, 0)
@@ -89,9 +107,23 @@ RunService.Heartbeat:Connect(function()
     end
 end)
 
--- Sistema de Perseguição PvP com Seleção Aleatória Dinâmica
-local attackEvent = ReplicatedStorage:WaitForChild("Events"):WaitForChild("AttackRequest")
+-- Loop Isolado de Auto Attack / Kill Aura Avançado (Roda em segundo plano)
+task.spawn(function()
+    while true do
+        -- Ataca se o Kill Aura de caça estiver ligado OU se o Auto Attack Global estiver ativo
+        if (_G.KillAuraAtivo and _G.PerseguirPlayer) or _G.AutoAttackGeral then
+            if attackEvent then
+                attackEvent:FireServer()
+            end
+        end
+        task.wait(0.1) -- Tempo de espera entre os ataques (0.1 segundos)
+    end
+end)
 
+print("[INFO] Parte 2 Carregada com sucesso.")
+-- ================= PARTE 3: MOTOR DE PERSEGUIÇÃO PVP DE TARGET ================= --
+
+-- Função que filtra e seleciona um jogador aleatório válido no servidor
 local function selecionarPlayerAleatorio()
     local todosPlayers = Players:GetPlayers()
     local candidatos = {}
@@ -112,10 +144,11 @@ local function selecionarPlayerAleatorio()
     return ""
 end
 
+-- Loop principal do sistema de caça e posicionamento PvP
 task.spawn(function()
     while true do
         if _G.PerseguirPlayer then
-            -- Se o modo aleatório estiver ligado e não houver alvo válido, escolhe um novo
+            -- Se o modo aleatório estiver ligado, verifica se precisa rotacionar o alvo
             if _G.TargetAleatorio then
                 local playerAtual = Players:FindFirstChild(_G.PlayerAlvo)
                 local precisaTrocar = false
@@ -131,7 +164,7 @@ task.spawn(function()
                 
                 if precisaTrocar or _G.PlayerAlvo == "" then
                     _G.PlayerAlvo = selecionarPlayerAleatorio()
-                    task.wait(0.5) -- Pequena pausa para estabilizar a troca de alvo
+                    task.wait(0.5) -- Pausa para estabilizar a troca de alvo
                 end
             end
 
@@ -145,18 +178,17 @@ task.spawn(function()
                 local tHumanoid = tPlayer.Character:FindFirstChildWhichIsA("Humanoid")
 
                 if tRoot and tHumanoid and tHumanoid.Health > 0 then
+                    -- Trava o boneco para o teletransporte PvP
                     humanoid.PlatformStand = true
                     rootPart.AssemblyLinearVelocity = Vector3.new(0, 0, 0)
                     
+                    -- Calcula a posição perfeitamente atrás das costas do alvo
                     local posicaoCostas = (tRoot.CFrame * CFrame.new(0, 0, _G.DistanciaCostas)).Position
                     rootPart.CFrame = CFrame.new(posicaoCostas, tRoot.Position)
-                    
-                    if _G.KillAuraAtivo and attackEvent then
-                        attackEvent:FireServer()
-                    end
                 end
             end
         else
+            -- Se a perseguição for desligada, verifica se o farm também está desligado antes de tirar o PlatformStand
             local character = player.Character
             local humanoid = character and character:FindFirstChildWhichIsA("Humanoid")
             if humanoid and not (_G.AutoFarmMegaBerry or _G.AutoFarmGoldenBerry or _G.AutoFarmAlien or _G.AutoFarmBerry) then
@@ -167,12 +199,12 @@ task.spawn(function()
     end
 end)
 
-print("[INFO] Parte 2 (PvP Otimizado com Modo Aleatório) carregada.")
--- ================= PARTE 3: INTERFACE DE USUÁRIO RAYFIELD v5.4 ================= --
+print("[INFO] Parte 3 Carregada com sucesso.")
+-- ================= PARTE 4: INICIALIZAÇÃO DA INTERFACE RAYFIELD ================= --
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-    Name = "🌌 Space Farm Hub | Target Mod v5.4",
+    Name = "🌌 Space Farm Hub | Target Mod v5.5",
     LoadingTitle = "Injetando Funções Avançadas de Caça...",
     LoadingSubtitle = "by Marco",
     ConfigurationSaving = { Enabled = true, FolderName = "SpaceFarmConfig", FileName = "Configoficial" },
@@ -190,22 +222,21 @@ local function obterListaPlayers()
     return lista
 end
 
+-- ABA 1: FARM
 FarmTab:CreateSection("⚡ COMPORTAMENTO DE TELEPORTE DIRETO")
 FarmTab:CreateToggle({Name = "TELEPORTE: MEGA BERRY 🔴", CurrentValue = false, Callback = function(Value) _G.AutoFarmMegaBerry = Value end})
 FarmTab:CreateToggle({Name = "TELEPORTE: GOLDEN BERRY / AMARELAS 🟡", CurrentValue = false, Callback = function(Value) _G.AutoFarmGoldenBerry = Value end})
 FarmTab:CreateToggle({Name = "TELEPORTE: ALIEN WORLD 👽", CurrentValue = false, Callback = function(Value) _G.AutoFarmAlien = Value end})
 FarmTab:CreateToggle({Name = "TELEPORTE: BERRY NORMAL 🍓", CurrentValue = false, Callback = function(Value) _G.AutoFarmBerry = Value end})
 
--- Menu de Alvos PvP Reestruturado
+-- ABA 2: PVP
 PlayersTab:CreateSection("👤 MODO DE SELEÇÃO DE TARGET")
 PlayersTab:CreateToggle({
     Name = "🎯 CAÇAR PLAYER ALEATÓRIO (Auto-Switch)",
     CurrentValue = false,
     Callback = function(Value) 
         _G.TargetAleatorio = Value 
-        if Value then
-            _G.PlayerAlvo = "" -- Reseta o alvo manual para o motor escolher um aleatório
-        end
+        if Value then _G.PlayerAlvo = "" end
     end
 })
 
@@ -223,14 +254,45 @@ local PlayerDropdown = PlayersTab:CreateDropdown({
 
 PlayersTab:CreateButton({Name = "🔄 Atualizar Lista de Players", Callback = function() PlayerDropdown:Refresh(obterListaPlayers()) end})
 
+print("[INFO] Parte 4 Carregada com sucesso.")
+-- ================= PARTE 5: FINALIZAÇÃO E ABA DE FUNÇÕES ESPECIAIS ================= --
+
 PlayersTab:CreateSection("⚔️ COMBATE EM MARCHA")
 PlayersTab:CreateToggle({Name = "ATIVAR SEGUIR PLAYER (TELEPORTE) 👥", CurrentValue = false, Callback = function(Value) _G.PerseguirPlayer = Value end})
 PlayersTab:CreateToggle({Name = "ATIVAR KILL AURA AUTOMÁTICO ⚔️", CurrentValue = false, Callback = function(Value) _G.KillAuraAtivo = Value end})
 
+local SpecialTab = Window:CreateTab("🔮 Funções Especiais")
+
+-- ABA 3: ESPECIAIS
+SpecialTab:CreateSection("🦅 HABILIDADES ESPECIAIS DO MORPH")
+SpecialTab:CreateToggle({
+    Name = "Permitir Voo (IsFlyingMorph) 🪐",
+    CurrentValue = false,
+    Callback = function(Value)
+        _G.FlyMorphAtivo = Value
+        Rayfield:Notify({
+            Title = "Status de Voo",
+            Content = Value and "Voo ativado através dos Atributos!" or "Voo desativado.",
+            Duration = 3
+        })
+    end
+})
+
+SpecialTab:CreateSection("⚔️ AUTO COMBATE GLOBAL")
+SpecialTab:CreateToggle({
+    Name = "Auto Attack Infinito (Macro de Ataque) ⚡",
+    CurrentValue = false,
+    Callback = function(Value)
+        _G.AutoAttackGeral = Value
+    end
+})
+
+-- Finalização
 Rayfield:LoadConfiguration()
 Rayfield:Notify({
-    Title = "Modo Caça Adicionado! 🎯",
-    Content = "Ative 'Caçar Player Aleatório' e ligue o 'Seguir Player' para iniciar a rotação automática.",
+    Title = "Modo Caça & Voo Injetado! 🎯🦅",
+    Content = "Script v5.5 carregado com sucesso. Use a aba 'Funções Especiais' para voar e atacar.",
     Duration = 5
 })
-print("[INFO] Script v5.4 Completo Carregado!")
+
+print("[INFO] Script v5.5 Completo Carregado!")
